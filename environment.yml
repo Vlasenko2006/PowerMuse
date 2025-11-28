@@ -1,0 +1,22 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Mon May  5 13:53:52 2025
+
+@author: andreyvlasenko
+"""
+
+name: audio-prediction
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.9
+  - librosa=0.10.0
+  - numpy=1.23.5
+  - scipy=1.10.1
+  - pytorch=2.0.1
+  - soundfile=0.12.1
+  - pydub=0.25.1
+  - tqdm=4.65.0
+  - ffmpeg
