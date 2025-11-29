@@ -198,6 +198,24 @@ def train_and_validate_multipattern(model,
             loss = loss / accumulation_steps
             loss.backward()
             
+            # Log gradient magnitudes for first batch of each epoch
+            if batch_idx == 0 and rank == 0:
+                total_grad_norm = 0.0
+                grad_info = []
+                for name, param in model.named_parameters():
+                    if param.grad is not None:
+                        grad_norm = param.grad.norm().item()
+                        total_grad_norm += grad_norm ** 2
+                        grad_info.append(f"{name}: {grad_norm:.6f}")
+                total_grad_norm = total_grad_norm ** 0.5
+                print(f"\n[Epoch {epoch} Batch 0] Gradient magnitudes:")
+                print(f"  Total grad norm: {total_grad_norm:.6f}")
+                for info in grad_info[:10]:  # Show first 10 layers
+                    print(f"    {info}")
+                if len(grad_info) > 10:
+                    print(f"    ... ({len(grad_info) - 10} more layers)")
+                print()
+            
             # Update weights after accumulation
             if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == len(train_loader):
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
