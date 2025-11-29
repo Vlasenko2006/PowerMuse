@@ -109,6 +109,21 @@ def multi_pattern_loss(reconstructed, inputs, output, targets, masks,
     """
     batch_size, num_patterns = inputs.shape[0], inputs.shape[1]
     
+    # Handle potential size mismatch due to encoder-decoder architecture
+    recon_len = reconstructed.shape[-1]
+    input_len = inputs.shape[-1]
+    if recon_len != input_len:
+        # Crop inputs to match reconstructed output size
+        inputs = inputs[..., :recon_len]
+    
+    output_len = output.shape[-1]
+    target_len = targets.shape[-1]
+    if output_len != target_len:
+        # Crop targets to match output size
+        targets = targets[..., :output_len]
+        if masks is not None:
+            masks = masks[..., :output_len]
+    
     # Reconstruction loss: average across all patterns
     rec_loss = 0.0
     for i in range(num_patterns):
@@ -144,6 +159,13 @@ def reconstruction_only_loss(reconstructed, inputs, criterion):
         loss: Average reconstruction loss across all patterns
     """
     num_patterns = inputs.shape[1]
+    
+    # Handle potential size mismatch due to encoder-decoder architecture
+    recon_len = reconstructed.shape[-1]
+    input_len = inputs.shape[-1]
+    if recon_len != input_len:
+        # Crop inputs to match reconstructed output size
+        inputs = inputs[..., :recon_len]
     
     total_loss = 0.0
     for i in range(num_patterns):
