@@ -269,7 +269,7 @@ def train_and_validate_multipattern(model,
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
             if rank == 0:
-                save_checkpoint(model, optimizer, epoch, best_val_loss, checkpoint_folder, is_best=True)
+                save_checkpoint(model, optimizer, epoch, checkpoint_folder, filename='model_best.pt')
                 print(f"★ New best model saved! Validation loss: {best_val_loss:.6f}")
         
         if rank == 0:
