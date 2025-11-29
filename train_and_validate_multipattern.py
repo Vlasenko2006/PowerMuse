@@ -234,25 +234,23 @@ def train_and_validate_multipattern(model,
                 train_pred_loss += pred_loss.item()
                 
                 # Add parasitic frequency regularization (Phase 2.5+)
-                # Note: Disabled due to inplace operation conflicts with DDP
-                # Will monitor parasitic frequencies through validation outputs instead
-                if False and (phase == 2.5 or phase == 3):
-                    # Scale parasitic pattern by batch std
-                    batch_std = inputs.std()
-                    scaled_pattern = parasitic_pattern * batch_std
+                if phase == 2.5 or phase == 3:
+                    # Scale parasitic pattern by batch std (create new tensor, no gradient needed for pattern)
+                    with torch.no_grad():
+                        batch_std = inputs.std()
+                        scaled_pattern = (parasitic_pattern * batch_std).clone()
                     
-                    # Pass through encoder-decoder only (no masking for detection)
-                    # Use no_grad to avoid modifying computation graph during forward pass
+                    # Forward pass with scaled pattern (gradients flow only through model)
                     pattern_masks = torch.ones(1, num_patterns, scaled_pattern.shape[-1], dtype=torch.bool, device=device)
                     pattern_reconstructed, _ = model(scaled_pattern.unsqueeze(0), pattern_masks)
                     
-                    # Trim to match lengths (model output may differ slightly due to encoder-decoder architecture)
+                    # Trim to match lengths
                     min_len = min(pattern_reconstructed.shape[-1], scaled_pattern.shape[-1])
                     pattern_reconstructed_trimmed = pattern_reconstructed.squeeze(0)[:, :, :min_len]
                     scaled_pattern_trimmed = scaled_pattern[:, :, :min_len]
                     
-                    # Compute parasitic MSE (detach pattern_reconstructed to avoid inplace grad issues)
-                    parasitic_loss = criterion(pattern_reconstructed_trimmed, scaled_pattern_trimmed.detach())
+                    # Compute parasitic MSE (pattern is already detached via no_grad above)
+                    parasitic_loss = criterion(pattern_reconstructed_trimmed, scaled_pattern_trimmed)
                     
                     train_parasitic_loss += parasitic_loss.item()
                     
