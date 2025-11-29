@@ -249,7 +249,9 @@ def train_and_validate_multipattern(model,
                     scaled_pattern_trimmed = scaled_pattern[:, :, :min_len]
                     
                     # Compute parasitic MSE
-                    parasitic_loss = criterion(pattern_reconstructed_trimmed, scaled_pattern_trimmed)                    train_parasitic_loss += parasitic_loss.item()
+                    parasitic_loss = criterion(pattern_reconstructed_trimmed, scaled_pattern_trimmed)
+                    
+                    train_parasitic_loss += parasitic_loss.item()
                     
                     # Add to main loss
                     loss = loss + parasitic_weight * parasitic_loss
