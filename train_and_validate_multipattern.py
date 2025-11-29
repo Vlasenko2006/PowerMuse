@@ -216,8 +216,9 @@ def train_and_validate_multipattern(model,
                 targets = targets.to(device)
                 batch_size = inputs.shape[0]
                 
-                # Use fixed validation masks
-                current_val_masks = val_masks[:batch_size] if batch_size <= val_masks.shape[0] else val_masks
+                # Expand fixed validation masks to batch size
+                # val_masks: [num_patterns, seq_len] -> [batch_size, num_patterns, seq_len]
+                current_val_masks = val_masks.unsqueeze(0).expand(batch_size, -1, -1)
                 
                 # Apply masking
                 masked_inputs = apply_mask(inputs, current_val_masks)
