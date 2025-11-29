@@ -46,8 +46,8 @@ def create_multipattern_dataset(output_folder="output", dataset_folder="dataset_
     print(f"Creating Multi-Pattern Dataset")
     print(f"{'='*60}")
 
-    # Calculate samples per chunk
-    samples_per_chunk = chunk_duration * target_sr
+    # Calculate samples per chunk (must be integer)
+    samples_per_chunk = int(chunk_duration * target_sr)
     
     # Process each file and collect all available chunks
     song_chunks = {}  # {song_idx: [(input_chunk, target_chunk), ...]}
