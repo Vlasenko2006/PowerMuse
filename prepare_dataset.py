@@ -83,7 +83,7 @@ def process_music_files(input_folder, output_folder, max_files=200, clip_duratio
 
 # Example Usage
 if __name__ == "__main__":
-    path = "path to your music"  # Input folder containing music files
+    path =  "/Volumes/Music_Video_Foto/Musik" # Input folder containing music files
     output_folder = "output"  # Output folder to save processed files
     
     # Check if the folder exists
@@ -99,7 +99,7 @@ if __name__ == "__main__":
     process_music_files(
         input_folder=path, 
         output_folder=output_folder, 
-        max_files=400,
+        max_files=2400,
         clip_duration=192,  # 12 * 16s chunks
         target_sr=22050     # Higher quality sample rate
     )

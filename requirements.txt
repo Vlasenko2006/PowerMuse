@@ -1,15 +1,18 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Mon May  5 13:53:14 2025
+# Multi-Pattern Audio Fusion - Python Dependencies
+# For PyTorch with CUDA support, see installation instructions below
 
-@author: andreyvlasenko
-"""
+# Core deep learning
+torch>=2.0.0
+torchaudio>=2.0.0
 
-librosa==0.10.0.post2
-numpy==1.23.5
-scipy==1.10.1
-torch==2.0.1
-soundfile==0.12.1
-pydub==0.25.1
-tqdm==4.65.0
+# Scientific computing
+numpy>=1.23.0
+scipy>=1.10.0
+
+# Audio processing
+librosa>=0.10.0
+soundfile>=0.12.0
+pydub>=0.25.0
+
+# Utilities
+tqdm>=4.65.0
