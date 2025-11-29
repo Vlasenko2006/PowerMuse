@@ -35,9 +35,11 @@ def train_and_validate_multipattern(model,
                                     music_out_folder,
                                     phase1_end=10,
                                     phase2_end=20,
+                                    phase2_5_end=40,
                                     accumulation_steps=4,
                                     use_scheduler=True,
                                     num_patterns=3,
+                                    parasitic_weight=0.1,
                                     rank=0,
                                     train_sampler=None):
     """
@@ -53,8 +55,15 @@ def train_and_validate_multipattern(model,
         - Loss: reconstruction_only_loss (random masks)
         - Frozen: transformer, fusion_layer
         
-    Phase 3 (epochs 21+): Full model training with transformer fusion
-        - Forward: 3 masked patterns → encode → transformer fusion → 1 fused output
+    Phase 2.5 (epochs 21-40): Same-input transformer fusion training
+        - Forward: 3 SAME patterns → encode → transformer fusion → 1 fused output
+        - Input: ((song1, song1, song1), (song2, song2, song2), ...)
+        - Loss: multi_pattern_loss (reconstruction + fusion)
+        - Frozen: none (all components trainable)
+        - Parasitic freq regularization added to loss
+        
+    Phase 3 (epochs 41+): Full model training with diverse inputs
+        - Forward: 3 diverse patterns → encode → transformer fusion → 1 fused output
         - Loss: multi_pattern_loss (chunk-wise MSE with min selection)
         - Frozen: none (all components trainable)
     
@@ -72,9 +81,11 @@ def train_and_validate_multipattern(model,
         music_out_folder: Output music save path
         phase1_end: Last epoch of phase 1 (default 10)
         phase2_end: Last epoch of phase 2 (default 20)
+        phase2_5_end: Last epoch of phase 2.5 (default 40)
         accumulation_steps: Gradient accumulation steps
         use_scheduler: Use learning rate scheduler
         num_patterns: Number of patterns per triplet (3)
+        parasitic_weight: Weight for parasitic frequency regularization (default 0.1)
     """
     model = model.to(device)
     
@@ -100,6 +111,12 @@ def train_and_validate_multipattern(model,
     )
     val_masks = val_masks.to(device)
     
+    # Create parasitic frequency detection pattern (flat spectrum)
+    # Shape: [num_patterns, channels, seq_len] matching one batch element
+    parasitic_pattern = torch.ones(num_patterns, 2, val_seq_len, device=device)
+    if rank == 0:
+        print(f"\nCreated parasitic frequency detection pattern: {parasitic_pattern.shape}")
+    
     best_val_loss = float('inf')
     
     for epoch in range(start_epoch, epochs + 1):
@@ -123,9 +140,15 @@ def train_and_validate_multipattern(model,
             freeze_parameters(actual_model.transformer)
             freeze_parameters(actual_model.fusion_layer)
             unfreeze_parameters(actual_model.encoder_decoder)
+        elif epoch <= phase2_5_end:
+            phase = 2.5
+            phase_name = "Phase 2.5: Same-Input Transformer Fusion"
+            unfreeze_parameters(actual_model.transformer)
+            unfreeze_parameters(actual_model.fusion_layer)
+            unfreeze_parameters(actual_model.encoder_decoder)
         else:
             phase = 3
-            phase_name = "Phase 3: Full Model + Transformer Fusion"
+            phase_name = "Phase 3: Full Model + Diverse Inputs"
             unfreeze_parameters(actual_model.transformer)
             unfreeze_parameters(actual_model.fusion_layer)
             unfreeze_parameters(actual_model.encoder_decoder)
@@ -152,27 +175,36 @@ def train_and_validate_multipattern(model,
             targets = targets.to(device)
             batch_size = inputs.shape[0]
             
+            # Phase 2.5: Convert to same-input format
+            if phase == 2.5:
+                # Use only first pattern, replicate 3 times
+                # inputs: [batch, 3, 2, seq_len] -> [batch, 3, 2, seq_len] where all 3 patterns are same
+                same_input = inputs[:, 0:1, :, :].expand(-1, num_patterns, -1, -1).contiguous()
+                same_target = targets[:, 0:1, :, :].expand(-1, num_patterns, -1, -1).contiguous()
+                inputs = same_input
+                targets = same_target
+            
             # Generate masks based on phase
             if phase == 1:
                 # Phase 1: No masking
                 masks = torch.ones(batch_size, num_patterns, inputs.shape[-1], dtype=torch.bool, device=device)
                 use_transformer = False
             else:
-                # Phase 2 & 3: Random masking
+                # Phase 2, 2.5, & 3: Random masking
                 masks = generate_batch_masks(
                     batch_size=batch_size,
                     num_patterns=num_patterns,
                     seq_len=inputs.shape[-1],
                     sample_rate=sample_rate
                 ).to(device)
-                use_transformer = (phase == 3)
+                use_transformer = (phase == 2.5 or phase == 3)
             
             # Apply masking to inputs
             masked_inputs = apply_mask(inputs, masks)
             
             # Forward pass
             if use_transformer:
-                # Phase 3: Full forward with transformer fusion
+                # Phase 2.5 & 3: Full forward with transformer fusion
                 reconstructed, fused_output = model(masked_inputs, masks)
                 
                 # Compute multi-pattern loss (chunk-wise with min selection)
@@ -184,6 +216,26 @@ def train_and_validate_multipattern(model,
                     masks=masks,
                     criterion=criterion
                 )
+                
+                # Add parasitic frequency regularization (Phase 2.5+)
+                if phase >= 2.5:
+                    # Scale parasitic pattern by batch std
+                    batch_std = inputs.std()
+                    scaled_pattern = parasitic_pattern * batch_std
+                    
+                    # Pass through encoder-decoder only (no masking for detection)
+                    with torch.no_grad():
+                        pattern_masks = torch.ones(1, num_patterns, scaled_pattern.shape[-1], dtype=torch.bool, device=device)
+                    pattern_reconstructed, _ = model(scaled_pattern.unsqueeze(0), pattern_masks)
+                    
+                    # Compute parasitic MSE
+                    parasitic_loss = criterion(pattern_reconstructed.squeeze(0), scaled_pattern)
+                    
+                    # Add to main loss
+                    loss = loss + parasitic_weight * parasitic_loss
+                    
+                    if batch_idx == 0 and rank == 0:
+                        print(f"  Parasitic loss: {parasitic_loss.item():.6f} (weight: {parasitic_weight})")
             else:
                 # Phase 1 & 2: Only reconstruction loss
                 reconstructed, _ = model(masked_inputs, masks)
@@ -238,6 +290,13 @@ def train_and_validate_multipattern(model,
                 targets = targets.to(device)
                 batch_size = inputs.shape[0]
                 
+                # Phase 2.5: Convert to same-input format for validation too
+                if phase == 2.5:
+                    same_input = inputs[:, 0:1, :, :].expand(-1, num_patterns, -1, -1).contiguous()
+                    same_target = targets[:, 0:1, :, :].expand(-1, num_patterns, -1, -1).contiguous()
+                    inputs = same_input
+                    targets = same_target
+                
                 # Expand fixed validation masks to batch size
                 # val_masks: [num_patterns, seq_len] -> [batch_size, num_patterns, seq_len]
                 current_val_masks = val_masks.unsqueeze(0).expand(batch_size, -1, -1)
@@ -246,7 +305,7 @@ def train_and_validate_multipattern(model,
                 masked_inputs = apply_mask(inputs, current_val_masks)
                 
                 # Forward pass
-                if phase == 3:
+                if phase == 2.5 or phase == 3:
                     reconstructed, fused_output = model(masked_inputs, current_val_masks)
                     loss, rec_loss, pred_loss = multi_pattern_loss(
                         reconstructed=reconstructed,

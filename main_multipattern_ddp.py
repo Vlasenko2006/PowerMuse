@@ -110,7 +110,11 @@ learning_rate = 0.0001
 # 3-Phase training schedule
 phase1_end = 10  # Epochs 1-10: Unmasked encoder-decoder
 phase2_end = 20  # Epochs 11-20: Masked encoder-decoder
-# Phase 3: Epochs 21+: Full model with transformer fusion
+phase2_5_end = 40  # Epochs 21-40: Same-input transformer fusion
+# Phase 3: Epochs 41+: Full model with diverse inputs
+
+# Parasitic frequency regularization
+parasitic_weight = 0.1  # Weight for parasitic frequency detection loss
 
 # Resume training
 resume_from_checkpoint = None  # Set to path if resuming
@@ -267,10 +271,17 @@ print_once(f"\nPhase 2 (Epochs {phase1_end+1}-{phase2_end}): Masked Encoder-Deco
 print_once(f"  - Train: encoder-decoder with random masking")
 print_once(f"  - Frozen: transformer, fusion_layer")
 print_once(f"  - Loss: reconstruction_only_loss")
-print_once(f"\nPhase 3 (Epochs {phase2_end+1}+): Full Model + Transformer Fusion")
+print_once(f"\nPhase 2.5 (Epochs {phase2_end+1}-{phase2_5_end}): Same-Input Transformer Fusion")
 print_once(f"  - Train: all components")
+print_once(f"  - Input: Same pattern replicated 3x per batch")
 print_once(f"  - Frozen: none")
-print_once(f"  - Loss: multi_pattern_loss (chunk-wise MSE)")
+print_once(f"  - Loss: multi_pattern_loss + parasitic_freq_regularization")
+print_once(f"  - Parasitic weight: {parasitic_weight}")
+print_once(f"\nPhase 3 (Epochs {phase2_5_end+1}+): Full Model + Diverse Inputs")
+print_once(f"  - Train: all components")
+print_once(f"  - Input: Diverse 3-pattern batches")
+print_once(f"  - Frozen: none")
+print_once(f"  - Loss: multi_pattern_loss + parasitic_freq_regularization")
 
 print_once(f"\nOptimization:")
 print_once(f"  Loss function: MSE")
@@ -328,9 +339,11 @@ try:
         music_out_folder=music_out_folder,
         phase1_end=phase1_end,
         phase2_end=phase2_end,
+        phase2_5_end=phase2_5_end,
         accumulation_steps=accumulation_steps,
         use_scheduler=True,
         num_patterns=num_patterns,
+        parasitic_weight=parasitic_weight,
         rank=rank,  # Pass rank for distributed training
         train_sampler=train_sampler  # Pass sampler to set epoch
     )
