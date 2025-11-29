@@ -186,8 +186,8 @@ def train_and_validate_multipattern(model,
                 
                 loss = reconstruction_only_loss(
                     reconstructed=reconstructed,
-                    original_inputs=inputs,
-                    masks=masks
+                    inputs=inputs,
+                    criterion=criterion
                 )
             
             # Scale loss for accumulation
