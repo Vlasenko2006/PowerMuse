@@ -234,7 +234,9 @@ def train_and_validate_multipattern(model,
                 train_pred_loss += pred_loss.item()
                 
                 # Add parasitic frequency regularization (Phase 2.5+)
-                if phase == 2.5 or phase == 3:
+                # Note: Disabled due to inplace operation conflicts with DDP
+                # Will monitor parasitic frequencies through validation outputs instead
+                if False and (phase == 2.5 or phase == 3):
                     # Scale parasitic pattern by batch std
                     batch_std = inputs.std()
                     scaled_pattern = parasitic_pattern * batch_std
