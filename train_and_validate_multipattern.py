@@ -177,12 +177,12 @@ def train_and_validate_multipattern(model,
                 
                 # Compute multi-pattern loss (chunk-wise with min selection)
                 loss = multi_pattern_loss(
-                    fused_output=fused_output,
+                    reconstructed=reconstructed,
+                    inputs=inputs,
+                    output=fused_output,
                     targets=targets,
                     masks=masks,
-                    reconstructed=reconstructed,
-                    original_inputs=inputs,
-                    sample_rate=sample_rate
+                    criterion=criterion
                 )
             else:
                 # Phase 1 & 2: Only reconstruction loss
@@ -231,12 +231,12 @@ def train_and_validate_multipattern(model,
                 if phase == 3:
                     reconstructed, fused_output = model(masked_inputs, current_val_masks)
                     loss = multi_pattern_loss(
-                        fused_output=fused_output,
+                        reconstructed=reconstructed,
+                        inputs=inputs,
+                        output=fused_output,
                         targets=targets,
                         masks=current_val_masks,
-                        reconstructed=reconstructed,
-                        original_inputs=inputs,
-                        sample_rate=sample_rate
+                        criterion=criterion
                     )
                 else:
                     reconstructed, _ = model(masked_inputs, current_val_masks)
