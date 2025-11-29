@@ -342,6 +342,13 @@ try:
     print_once(f"Music outputs saved to: {music_out_folder}")
     print_once(f"Best model: {os.path.join(checkpoint_folder, 'model_best.pt')}")
 
+except Exception as e:
+    print(f"[Rank {rank}] ERROR during training: {e}")
+    import traceback
+    traceback.print_exc()
+    raise
+
 finally:
     # Clean up distributed
+    print(f"[Rank {rank}] Cleaning up distributed training...")
     cleanup_distributed()
