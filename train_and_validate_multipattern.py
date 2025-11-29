@@ -134,6 +134,10 @@ def train_and_validate_multipattern(model,
             print(f"\n{'='*60}")
             print(f"Epoch {epoch}/{epochs} - {phase_name}")
             print(f"Learning rate: {optimizer.param_groups[0]['lr']:.6f}")
+            # Print GPU memory usage
+            if torch.cuda.is_available():
+                gpu_mem = torch.cuda.max_memory_allocated(device) / 1024**3
+                print(f"GPU memory allocated: {gpu_mem:.2f} GB")
             print(f"{'='*60}")
         
         # Training
@@ -270,3 +274,6 @@ def train_and_validate_multipattern(model,
         
         if rank == 0:
             print(f"{'='*60}\n")
+        
+        # Clear GPU cache after each epoch to prevent OOM
+        torch.cuda.empty_cache()
