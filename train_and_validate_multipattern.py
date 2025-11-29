@@ -238,8 +238,8 @@ def train_and_validate_multipattern(model,
                     reconstructed, _ = model(masked_inputs, current_val_masks)
                     loss = reconstruction_only_loss(
                         reconstructed=reconstructed,
-                        original_inputs=inputs,
-                        masks=current_val_masks
+                        inputs=inputs,
+                        criterion=criterion
                     )
                 
                 val_loss += loss.item()
