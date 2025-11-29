@@ -233,32 +233,7 @@ def train_and_validate_multipattern(model,
                 train_rec_loss += rec_loss.item()
                 train_pred_loss += pred_loss.item()
                 
-                # Add parasitic frequency regularization (Phase 2.5+)
-                if phase == 2.5 or phase == 3:
-                    # Scale parasitic pattern by batch std (create new tensor, no gradient needed for pattern)
-                    with torch.no_grad():
-                        batch_std = inputs.std()
-                        scaled_pattern = (parasitic_pattern * batch_std).clone()
-                    
-                    # Forward pass with scaled pattern (gradients flow only through model)
-                    pattern_masks = torch.ones(1, num_patterns, scaled_pattern.shape[-1], dtype=torch.bool, device=device)
-                    pattern_reconstructed, _ = model(scaled_pattern.unsqueeze(0), pattern_masks)
-                    
-                    # Trim to match lengths
-                    min_len = min(pattern_reconstructed.shape[-1], scaled_pattern.shape[-1])
-                    pattern_reconstructed_trimmed = pattern_reconstructed.squeeze(0)[:, :, :min_len]
-                    scaled_pattern_trimmed = scaled_pattern[:, :, :min_len]
-                    
-                    # Compute parasitic MSE (pattern is already detached via no_grad above)
-                    parasitic_loss = criterion(pattern_reconstructed_trimmed, scaled_pattern_trimmed)
-                    
-                    train_parasitic_loss += parasitic_loss.item()
-                    
-                    # Add to main loss
-                    loss = loss + parasitic_weight * parasitic_loss
-                    
-                    if batch_idx == 0 and rank == 0:
-                        print(f"  Parasitic loss: {parasitic_loss.item():.6f} (weight: {parasitic_weight})")
+                # Parasitic frequency regularization will be done separately after main loss
             else:
                 # Phase 1 & 2: Only reconstruction loss
                 reconstructed, _ = model(masked_inputs, masks)
@@ -274,6 +249,32 @@ def train_and_validate_multipattern(model,
             # Scale loss for accumulation
             loss = loss / accumulation_steps
             loss.backward()
+            
+            # Add parasitic frequency regularization (Phase 2.5+) - separate backward pass
+            if phase == 2.5 or phase == 3:
+                # Scale parasitic pattern by batch std (no gradient needed for pattern)
+                with torch.no_grad():
+                    batch_std = inputs.std()
+                    scaled_pattern = (parasitic_pattern * batch_std).clone()
+                
+                # Forward pass with scaled pattern
+                pattern_masks = torch.ones(1, num_patterns, scaled_pattern.shape[-1], dtype=torch.bool, device=device)
+                pattern_reconstructed, _ = model(scaled_pattern.unsqueeze(0), pattern_masks)
+                
+                # Trim to match lengths
+                min_len = min(pattern_reconstructed.shape[-1], scaled_pattern.shape[-1])
+                pattern_reconstructed_trimmed = pattern_reconstructed.squeeze(0)[:, :, :min_len]
+                scaled_pattern_trimmed = scaled_pattern[:, :, :min_len]
+                
+                # Compute parasitic MSE and backward separately
+                parasitic_loss = criterion(pattern_reconstructed_trimmed, scaled_pattern_trimmed)
+                parasitic_loss_scaled = (parasitic_weight * parasitic_loss) / accumulation_steps
+                parasitic_loss_scaled.backward()
+                
+                train_parasitic_loss += parasitic_loss.item()
+                
+                if batch_idx == 0 and rank == 0:
+                    print(f"  Parasitic loss: {parasitic_loss.item():.6f} (weight: {parasitic_weight})")
             
             # Monitor transformer layer gradients for vanishing gradient detection
             if batch_idx == 0 and rank == 0:
