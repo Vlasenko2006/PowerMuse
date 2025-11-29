@@ -32,7 +32,9 @@ def train_and_validate_multipattern(model,
                                     phase2_end=20,
                                     accumulation_steps=4,
                                     use_scheduler=True,
-                                    num_patterns=3):
+                                    num_patterns=3,
+                                    rank=0,
+                                    train_sampler=None):
     """
     Three-phase training for multi-pattern fusion model.
     
@@ -98,6 +100,10 @@ def train_and_validate_multipattern(model,
     best_val_loss = float('inf')
     
     for epoch in range(start_epoch, epochs + 1):
+        # Set epoch for distributed sampler
+        if train_sampler is not None:
+            train_sampler.set_epoch(epoch)
+        
         # Determine current phase
         if epoch <= phase1_end:
             phase = 1
@@ -118,10 +124,11 @@ def train_and_validate_multipattern(model,
             unfreeze_parameters(model.fusion_layer)
             unfreeze_parameters(model.encoder_decoder)
         
-        print(f"\n{'='*60}")
-        print(f"Epoch {epoch}/{epochs} - {phase_name}")
-        print(f"Learning rate: {optimizer.param_groups[0]['lr']:.6f}")
-        print(f"{'='*60}")
+        if rank == 0:
+            print(f"\n{'='*60}")
+            print(f"Epoch {epoch}/{epochs} - {phase_name}")
+            print(f"Learning rate: {optimizer.param_groups[0]['lr']:.6f}")
+            print(f"{'='*60}")
         
         # Training
         model.train()
@@ -190,7 +197,8 @@ def train_and_validate_multipattern(model,
             train_loss += loss.item() * accumulation_steps
         
         avg_train_loss = train_loss / len(train_loader)
-        print(f"Training Loss: {avg_train_loss:.6f}")
+        if rank == 0:
+            print(f"Training Loss: {avg_train_loss:.6f}")
         
         # Validation
         model.eval()
@@ -230,14 +238,15 @@ def train_and_validate_multipattern(model,
                 val_loss += loss.item()
         
         avg_val_loss = val_loss / len(val_loader)
-        print(f"Validation Loss: {avg_val_loss:.6f}")
+        if rank == 0:
+            print(f"Validation Loss: {avg_val_loss:.6f}")
         
         # Update scheduler
         if scheduler is not None:
             scheduler.step(avg_val_loss)
         
         # Save checkpoint every 10 epochs
-        if epoch % 10 == 0:
+        if epoch % 10 == 0 and rank == 0:
             save_checkpoint(model, optimizer, epoch, checkpoint_folder)
             # Note: save_sample_as_numpy may need adaptation for multi-pattern
             try:
@@ -248,7 +257,9 @@ def train_and_validate_multipattern(model,
         # Save best model
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
-            save_checkpoint(model, optimizer, epoch, checkpoint_folder, filename="model_best.pt")
-            print(f"★ New best model saved! Validation loss: {best_val_loss:.6f}")
+            if rank == 0:
+                save_checkpoint(model, optimizer, epoch, best_val_loss, checkpoint_folder, is_best=True)
+                print(f"★ New best model saved! Validation loss: {best_val_loss:.6f}")
         
-        print(f"{'='*60}\n")
+        if rank == 0:
+            print(f"{'='*60}\n")
