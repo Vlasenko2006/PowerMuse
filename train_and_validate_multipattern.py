@@ -17,6 +17,11 @@ def unfreeze_parameters(module):
         param.requires_grad = True
 
 
+def get_actual_model(model):
+    """Get the actual model, unwrapping DDP if necessary."""
+    return model.module if hasattr(model, 'module') else model
+
+
 def train_and_validate_multipattern(model,
                                     train_loader,
                                     val_loader,
@@ -102,25 +107,28 @@ def train_and_validate_multipattern(model,
         if train_sampler is not None:
             train_sampler.set_epoch(epoch)
         
+        # Get actual model (unwrap DDP if necessary)
+        actual_model = get_actual_model(model)
+        
         # Determine current phase
         if epoch <= phase1_end:
             phase = 1
             phase_name = "Phase 1: Unmasked Encoder-Decoder"
-            freeze_parameters(model.transformer)
-            freeze_parameters(model.fusion_layer)
-            unfreeze_parameters(model.encoder_decoder)
+            freeze_parameters(actual_model.transformer)
+            freeze_parameters(actual_model.fusion_layer)
+            unfreeze_parameters(actual_model.encoder_decoder)
         elif epoch <= phase2_end:
             phase = 2
             phase_name = "Phase 2: Masked Encoder-Decoder"
-            freeze_parameters(model.transformer)
-            freeze_parameters(model.fusion_layer)
-            unfreeze_parameters(model.encoder_decoder)
+            freeze_parameters(actual_model.transformer)
+            freeze_parameters(actual_model.fusion_layer)
+            unfreeze_parameters(actual_model.encoder_decoder)
         else:
             phase = 3
             phase_name = "Phase 3: Full Model + Transformer Fusion"
-            unfreeze_parameters(model.transformer)
-            unfreeze_parameters(model.fusion_layer)
-            unfreeze_parameters(model.encoder_decoder)
+            unfreeze_parameters(actual_model.transformer)
+            unfreeze_parameters(actual_model.fusion_layer)
+            unfreeze_parameters(actual_model.encoder_decoder)
         
         if rank == 0:
             print(f"\n{'='*60}")
