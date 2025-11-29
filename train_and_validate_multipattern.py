@@ -89,7 +89,6 @@ def train_and_validate_multipattern(model,
     first_batch = next(iter(val_loader))[0]
     val_seq_len = first_batch.shape[-1]
     val_masks = create_fixed_validation_masks(
-        batch_size=first_batch.shape[0],
         num_patterns=num_patterns,
         seq_len=val_seq_len,
         sample_rate=sample_rate
