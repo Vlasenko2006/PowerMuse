@@ -55,16 +55,34 @@ def create_multipattern_dataset(output_folder="output", dataset_folder="dataset_
     
     for file_idx, npy_file in enumerate(npy_files):
         file_path = os.path.join(output_folder, npy_file)
-        audio_array = np.load(file_path)
+        
+        try:
+            audio_array = np.load(file_path)
+        except (ValueError, IOError) as e:
+            print(f"ERROR loading {npy_file}: {e}")
+            print(f"  Skipping corrupted file")
+            skipped_files += 1
+            continue
+        
+        # Validate shape
+        expected_samples = 192 * target_sr  # 192 seconds at target_sr
+        if audio_array.ndim != 2 or audio_array.shape[0] != 2:
+            print(f"ERROR {npy_file}: Invalid shape {audio_array.shape}, expected (2, ~{expected_samples})")
+            skipped_files += 1
+            continue
         
         # Ensure the audio is long enough for at least one input-target pair
         total_samples = audio_array.shape[-1]
         expected_chunks = 12  # 196s / 16.33s ≈ 12 chunks per song
         
         if total_samples < 2 * samples_per_chunk:  # Need at least 2 chunks for 1 pair
-            print(f"Skipping {npy_file}: Too short ({total_samples} samples)")
+            print(f"Skipping {npy_file}: Too short ({total_samples} samples, need {2 * samples_per_chunk})")
             skipped_files += 1
             continue
+        
+        if total_samples < expected_samples * 0.8:  # Less than 80% of expected length
+            print(f"WARNING {npy_file}: Shorter than expected ({total_samples} vs {expected_samples} samples)")
+            # Don't skip, but warn
         
         # Split into chunks
         num_full_chunks = min(expected_chunks, total_samples // samples_per_chunk)
