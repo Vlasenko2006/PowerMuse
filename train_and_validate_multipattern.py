@@ -40,6 +40,7 @@ def train_and_validate_multipattern(model,
                                     use_scheduler=True,
                                     num_patterns=3,
                                     parasitic_weight=0.1,
+                                    freeze_components=False,
                                     rank=0,
                                     train_sampler=None):
     """
@@ -86,6 +87,7 @@ def train_and_validate_multipattern(model,
         use_scheduler: Use learning rate scheduler
         num_patterns: Number of patterns per triplet (3)
         parasitic_weight: Weight for parasitic frequency regularization (default 0.1)
+        freeze_components: If True, freeze transformer/fusion in Phase 1-2 (default False)
     """
     model = model.to(device)
     
@@ -131,14 +133,22 @@ def train_and_validate_multipattern(model,
         if epoch <= phase1_end:
             phase = 1
             phase_name = "Phase 1: Unmasked Encoder-Decoder"
-            freeze_parameters(actual_model.transformer)
-            freeze_parameters(actual_model.fusion_layer)
+            if freeze_components:
+                freeze_parameters(actual_model.transformer)
+                freeze_parameters(actual_model.fusion_layer)
+            else:
+                unfreeze_parameters(actual_model.transformer)
+                unfreeze_parameters(actual_model.fusion_layer)
             unfreeze_parameters(actual_model.encoder_decoder)
         elif epoch <= phase2_end:
             phase = 2
             phase_name = "Phase 2: Masked Encoder-Decoder"
-            freeze_parameters(actual_model.transformer)
-            freeze_parameters(actual_model.fusion_layer)
+            if freeze_components:
+                freeze_parameters(actual_model.transformer)
+                freeze_parameters(actual_model.fusion_layer)
+            else:
+                unfreeze_parameters(actual_model.transformer)
+                unfreeze_parameters(actual_model.fusion_layer)
             unfreeze_parameters(actual_model.encoder_decoder)
         elif epoch <= phase2_5_end:
             phase = 2.5
@@ -166,6 +176,9 @@ def train_and_validate_multipattern(model,
         # Training
         model.train()
         train_loss = 0
+        train_rec_loss = 0
+        train_pred_loss = 0
+        train_parasitic_loss = 0
         optimizer.zero_grad()
         
         for batch_idx, (inputs, targets) in enumerate(tqdm(train_loader, desc=f"Training Epoch {epoch}")):
@@ -217,6 +230,9 @@ def train_and_validate_multipattern(model,
                     criterion=criterion
                 )
                 
+                train_rec_loss += rec_loss.item()
+                train_pred_loss += pred_loss.item()
+                
                 # Add parasitic frequency regularization (Phase 2.5+)
                 if phase >= 2.5:
                     # Scale parasitic pattern by batch std
@@ -230,6 +246,8 @@ def train_and_validate_multipattern(model,
                     
                     # Compute parasitic MSE
                     parasitic_loss = criterion(pattern_reconstructed.squeeze(0), scaled_pattern)
+                    
+                    train_parasitic_loss += parasitic_loss.item()
                     
                     # Add to main loss
                     loss = loss + parasitic_weight * parasitic_loss
@@ -250,23 +268,23 @@ def train_and_validate_multipattern(model,
             loss = loss / accumulation_steps
             loss.backward()
             
-            # Log gradient magnitudes for first batch of each epoch
+            # Monitor transformer layer gradients for vanishing gradient detection
             if batch_idx == 0 and rank == 0:
-                total_grad_norm = 0.0
-                grad_info = []
+                transformer_grad_norm = 0.0
+                transformer_layers = []
                 for name, param in model.named_parameters():
-                    if param.grad is not None:
+                    if 'transformer' in name and param.grad is not None:
                         grad_norm = param.grad.norm().item()
-                        total_grad_norm += grad_norm ** 2
-                        grad_info.append(f"{name}: {grad_norm:.6f}")
-                total_grad_norm = total_grad_norm ** 0.5
-                print(f"\n[Epoch {epoch} Batch 0] Gradient magnitudes:")
-                print(f"  Total grad norm: {total_grad_norm:.6f}")
-                for info in grad_info[:10]:  # Show first 10 layers
-                    print(f"    {info}")
-                if len(grad_info) > 10:
-                    print(f"    ... ({len(grad_info) - 10} more layers)")
-                print()
+                        transformer_grad_norm += grad_norm ** 2
+                        transformer_layers.append(f"{name}: {grad_norm:.6f}")
+                
+                if transformer_layers:
+                    transformer_grad_norm = transformer_grad_norm ** 0.5
+                    print(f"\n[Epoch {epoch}] Transformer gradient monitoring:")
+                    print(f"  Total transformer grad norm: {transformer_grad_norm:.6f}")
+                    for layer_info in transformer_layers:
+                        print(f"    {layer_info}")
+                    print()
             
             # Update weights after accumulation
             if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == len(train_loader):
@@ -279,10 +297,19 @@ def train_and_validate_multipattern(model,
         avg_train_loss = train_loss / len(train_loader)
         if rank == 0:
             print(f"Training Loss: {avg_train_loss:.6f}")
+            if phase >= 2.5:
+                avg_train_rec = train_rec_loss / len(train_loader)
+                avg_train_pred = train_pred_loss / len(train_loader)
+                avg_train_parasitic = train_parasitic_loss / len(train_loader)
+                print(f"  Reconstruction: {avg_train_rec:.6f}")
+                print(f"  Prediction: {avg_train_pred:.6f}")
+                print(f"  Parasitic: {avg_train_parasitic:.6f} (weighted: {avg_train_parasitic * parasitic_weight:.6f})")
         
         # Validation
         model.eval()
         val_loss = 0
+        val_rec_loss = 0
+        val_pred_loss = 0
         
         with torch.no_grad():
             for batch_idx, (inputs, targets) in enumerate(tqdm(val_loader, desc=f"Validation Epoch {epoch}")):
@@ -315,6 +342,8 @@ def train_and_validate_multipattern(model,
                         masks=current_val_masks,
                         criterion=criterion
                     )
+                    val_rec_loss += rec_loss.item()
+                    val_pred_loss += pred_loss.item()
                 else:
                     reconstructed, _ = model(masked_inputs, current_val_masks)
                     loss = reconstruction_only_loss(
@@ -328,6 +357,11 @@ def train_and_validate_multipattern(model,
         avg_val_loss = val_loss / len(val_loader)
         if rank == 0:
             print(f"Validation Loss: {avg_val_loss:.6f}")
+            if phase >= 2.5:
+                avg_val_rec = val_rec_loss / len(val_loader)
+                avg_val_pred = val_pred_loss / len(val_loader)
+                print(f"  Reconstruction: {avg_val_rec:.6f}")
+                print(f"  Prediction: {avg_val_pred:.6f}")
         
         # Update scheduler
         if scheduler is not None:
