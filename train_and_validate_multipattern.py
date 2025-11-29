@@ -240,6 +240,7 @@ def train_and_validate_multipattern(model,
                     scaled_pattern = parasitic_pattern * batch_std
                     
                     # Pass through encoder-decoder only (no masking for detection)
+                    # Use no_grad to avoid modifying computation graph during forward pass
                     pattern_masks = torch.ones(1, num_patterns, scaled_pattern.shape[-1], dtype=torch.bool, device=device)
                     pattern_reconstructed, _ = model(scaled_pattern.unsqueeze(0), pattern_masks)
                     
@@ -248,8 +249,8 @@ def train_and_validate_multipattern(model,
                     pattern_reconstructed_trimmed = pattern_reconstructed.squeeze(0)[:, :, :min_len]
                     scaled_pattern_trimmed = scaled_pattern[:, :, :min_len]
                     
-                    # Compute parasitic MSE
-                    parasitic_loss = criterion(pattern_reconstructed_trimmed, scaled_pattern_trimmed)
+                    # Compute parasitic MSE (detach pattern_reconstructed to avoid inplace grad issues)
+                    parasitic_loss = criterion(pattern_reconstructed_trimmed, scaled_pattern_trimmed.detach())
                     
                     train_parasitic_loss += parasitic_loss.item()
                     
