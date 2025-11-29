@@ -234,7 +234,7 @@ def train_and_validate_multipattern(model,
                 train_pred_loss += pred_loss.item()
                 
                 # Add parasitic frequency regularization (Phase 2.5+)
-                if phase >= 2.5:
+                if phase == 2.5 or phase == 3:
                     # Scale parasitic pattern by batch std
                     batch_std = inputs.std()
                     scaled_pattern = parasitic_pattern * batch_std
@@ -263,6 +263,8 @@ def train_and_validate_multipattern(model,
                     inputs=inputs,
                     criterion=criterion
                 )
+                
+                train_rec_loss += loss.item()
             
             # Scale loss for accumulation
             loss = loss / accumulation_steps
@@ -297,13 +299,16 @@ def train_and_validate_multipattern(model,
         avg_train_loss = train_loss / len(train_loader)
         if rank == 0:
             print(f"Training Loss: {avg_train_loss:.6f}")
-            if phase >= 2.5:
+            if phase == 2.5 or phase == 3:
                 avg_train_rec = train_rec_loss / len(train_loader)
                 avg_train_pred = train_pred_loss / len(train_loader)
                 avg_train_parasitic = train_parasitic_loss / len(train_loader)
                 print(f"  Reconstruction: {avg_train_rec:.6f}")
                 print(f"  Prediction: {avg_train_pred:.6f}")
                 print(f"  Parasitic: {avg_train_parasitic:.6f} (weighted: {avg_train_parasitic * parasitic_weight:.6f})")
+            elif phase == 1 or phase == 2:
+                avg_train_rec = train_rec_loss / len(train_loader)
+                print(f"  Reconstruction: {avg_train_rec:.6f}")
         
         # Validation
         model.eval()
@@ -351,17 +356,21 @@ def train_and_validate_multipattern(model,
                         inputs=inputs,
                         criterion=criterion
                     )
+                    val_rec_loss += loss.item()
                 
                 val_loss += loss.item()
         
         avg_val_loss = val_loss / len(val_loader)
         if rank == 0:
             print(f"Validation Loss: {avg_val_loss:.6f}")
-            if phase >= 2.5:
+            if phase == 2.5 or phase == 3:
                 avg_val_rec = val_rec_loss / len(val_loader)
                 avg_val_pred = val_pred_loss / len(val_loader)
                 print(f"  Reconstruction: {avg_val_rec:.6f}")
                 print(f"  Prediction: {avg_val_pred:.6f}")
+            elif phase == 1 or phase == 2:
+                avg_val_rec = val_rec_loss / len(val_loader)
+                print(f"  Reconstruction: {avg_val_rec:.6f}")
         
         # Update scheduler
         if scheduler is not None:
