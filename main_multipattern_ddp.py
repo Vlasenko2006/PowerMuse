@@ -93,7 +93,7 @@ num_patterns = 3  # Number of input patterns per training example
 
 # Model architecture
 n_channels = 64  # Encoded channels
-n_seq = 9  # Sequence multiplier (required for 360000 sample reconstruction)
+n_seq = 32  # Increased compression for shorter transformer input (360000/32 = 11250 tokens per pattern)
 num_heads = 8  # Transformer attention heads
 num_layers = 4  # Transformer layers
 dropout = 0.15  # Dropout for regularization
@@ -153,28 +153,26 @@ print_once(f"\n{'='*60}")
 print_once(f"LOADING MULTI-PATTERN DATASETS")
 print_once(f"{'='*60}")
 
-train_data = np.load(os.path.join(dataset_folder, "training_set_multipattern.npy"), allow_pickle=True)
-val_data = np.load(os.path.join(dataset_folder, "validation_set_multipattern.npy"), allow_pickle=True)
+# Use memory-mapped loading to save memory (loads data on-demand)
+from model_multipattern import MultiPatternAudioDatasetMmap
 
-print_once(f"Training triplets: {len(train_data)}")
-print_once(f"Validation triplets: {len(val_data)}")
+# Memory-mapped dataset loads from folder with train_inputs/targets.npy files
+train_dataset = MultiPatternAudioDatasetMmap(dataset_folder)
+val_dataset = MultiPatternAudioDatasetMmap(dataset_folder)
+
+print_once(f"Training triplets: {len(train_dataset)}")
+print_once(f"Validation triplets: {len(val_dataset)}")
 print_once(f"Patterns per triplet: {num_patterns}")
 print_once(f"Sample rate: {sample_rate} Hz")
 print_once(f"Chunk duration: {chunk_duration:.2f}s")
 print_once(f"Sequence length: {seq_len} samples")
 
 # Verify data format
-if rank == 0 and len(train_data) > 0:
-    example = train_data[0]
-    inputs, targets = example
+if rank == 0 and len(train_dataset) > 0:
+    example_inputs, example_targets = train_dataset[0]
     print_once(f"\nData format verification:")
-    print_once(f"  Inputs: {len(inputs)} patterns")
-    print_once(f"  Input shape (per pattern): {inputs[0].shape}")
-    print_once(f"  Targets: {len(targets)} patterns")
-    print_once(f"  Target shape (per pattern): {targets[0].shape}")
-
-train_dataset = MultiPatternAudioDataset(train_data)
-val_dataset = MultiPatternAudioDataset(val_data)
+    print_once(f"  Inputs shape: {example_inputs.shape}")  # Should be [num_patterns, 2, 360000]
+    print_once(f"  Targets shape: {example_targets.shape}")  # Should be [num_patterns, 2, 360000]
 
 # Create distributed samplers
 train_sampler = DistributedSampler(

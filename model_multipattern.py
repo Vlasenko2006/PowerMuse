@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+import numpy as np
+import os
 from torch.utils.data import Dataset
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
 from encoder_decoder import encoder_decoder  # Importing encoder-decoder class
@@ -25,6 +27,49 @@ class MultiPatternAudioDataset(Dataset):
         # Stack inputs and targets: each is list of 3 arrays
         inputs_tensor = torch.tensor(torch.stack([torch.tensor(inp, dtype=torch.float32) for inp in inputs]), dtype=torch.float32)
         targets_tensor = torch.tensor(torch.stack([torch.tensor(tgt, dtype=torch.float32) for tgt in targets]), dtype=torch.float32)
+        
+        return inputs_tensor, targets_tensor
+
+
+# Memory-mapped dataset class (use this for large datasets to save memory)
+class MultiPatternAudioDatasetMmap(Dataset):
+    def __init__(self, dataset_folder):
+        """
+        Memory-mapped dataset for multi-pattern training.
+        Loads data on-demand instead of keeping everything in memory.
+        
+        Args:
+            dataset_folder: Path to folder containing train_inputs.npy and train_targets.npy
+                           (or val_inputs.npy and val_targets.npy)
+        """
+        # Determine if train or val based on folder content
+        train_input_path = os.path.join(dataset_folder, "train_inputs.npy")
+        val_input_path = os.path.join(dataset_folder, "val_inputs.npy")
+        
+        if os.path.exists(train_input_path):
+            self.inputs = np.load(train_input_path, mmap_mode='r')
+            self.targets = np.load(os.path.join(dataset_folder, "train_targets.npy"), mmap_mode='r')
+            self.is_train = True
+        elif os.path.exists(val_input_path):
+            self.inputs = np.load(val_input_path, mmap_mode='r')
+            self.targets = np.load(os.path.join(dataset_folder, "val_targets.npy"), mmap_mode='r')
+            self.is_train = False
+        else:
+            raise FileNotFoundError(f"No dataset files found in {dataset_folder}")
+        
+        self.length = len(self.inputs)
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, idx):
+        # Memory-mapped array access - loads only this item from disk
+        inputs = self.inputs[idx]  # Shape: [num_patterns, 2, 360000]
+        targets = self.targets[idx]  # Shape: [num_patterns, 2, 360000]
+        
+        # Convert to tensors
+        inputs_tensor = torch.from_numpy(inputs.copy()).float()
+        targets_tensor = torch.from_numpy(targets.copy()).float()
         
         return inputs_tensor, targets_tensor
 
