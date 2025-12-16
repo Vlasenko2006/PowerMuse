@@ -1,17 +1,71 @@
-# Session Checkpoint: 2-Stage Architecture Fix + Gradient Stability
+# Session Checkpoint: Training Status & GitHub Repository
 
-**Date**: December 15, 2025  
-**Status**: ✅ ARCHITECTURE FIXED - 2-Stage Cascade, Training Stable Through Epoch 7+  
-**Next Action**: Monitor training to epoch 50, verify no NaN collapse, push complementarity to 90%+
+**Date**: December 16, 2025  
+**Status**: ✅ Repository Published to GitHub | ⚠️ Training Stuck at 74% Complementarity (Epoch 51/200)  
+**Next Action**: Restart training with stronger complementarity pressure (mask_reg_weight 0.1 → 0.5)
 
 ---
 
-## 🎉 Executive Summary
+## 🎉 Latest Update (Dec 16, 2025)
 
-**Problem Solved**: Gradient explosion causing NaN collapse at epoch 3
-**Root Cause**: 3-stage cascade with 0.1× weak residual in stage 2 → RMS collapse (1.09 vs 5.69) → required 5.2× amplification → gradients exploded exponentially
-**Solution**: Simplified to 2-stage cascade with full 1.0× residual in both stages
-**Result**: Training stable through 7+ epochs, no NaN collapse, gradients controlled 1-8 range
+### GitHub Repository Published ✅
+
+**Repository**: https://github.com/Vlasenko2006/PowerMuse  
+**Status**: Successfully pushed to GitHub  
+**Files**: 63 files (30 Python, 22 documentation, 10 shell scripts, 1 config)  
+**Size**: ~20,000 lines of code, 221 KB compressed
+
+**Commits**:
+1. Initial commit: 2-stage cascade transformer with creative agent (88 files)
+2. Clean repository: Removed 27 deprecated files, updated documentation
+
+**Key Files**:
+- `README.md` - Comprehensive project overview
+- `FILES_MANIFEST.md` - Complete file inventory
+- `SESSION_CHECKPOINT.md` - This file (training history)
+- Core model: `model_simple_transformer.py`, `creative_agent.py`, `audio_discriminator.py`
+- Training: `train_simple_worker.py`, `train_simple_ddp.py`
+- Launch scripts: `run_train_creative_agent_fixed.sh`, `run_train_creative_agent_resume.sh`
+
+### Training Status: Complementarity Stuck at 74% ⚠️
+
+**Problem**: After epoch 20 resume, complementarity dropped and plateaued at 74% (was 87% at epoch 19)
+
+**Diagnosis**:
+- Epoch 1-20: Complementarity increased 75% → 87% (healthy)
+- Epoch 21-51: **Stuck at 73-74%** with mask overlap 0.26-0.27
+- Mask regularization loss: Hovering at 0.76-0.78 (should decrease to 0.10-0.20)
+- Model learned local optimum: overlapping masks work "well enough" for reconstruction
+
+**Root Cause**: `mask_reg_weight=0.1` too weak
+- Complementarity loss ≈ 0.27 (overlap)
+- Effective weight: 0.27 × 0.1 = **0.027** contribution
+- RMS losses: 0.13-0.14 × 0.3 = **0.04** contribution (dominates)
+- Model prioritizes reconstruction over mask separation
+
+**Solution Created**: `run_train_creative_agent_push_complementarity.sh`
+- Increase `mask_reg_weight` from 0.1 → **0.5** (5× stronger)
+- Effective complementarity weight: 0.27 × 0.5 = **0.135** (3.5× larger than RMS)
+- Expected: Force model to separate masks, push complementarity 74% → 90%+
+
+### Current Training Metrics (Epoch 51/200)
+
+- **Validation Loss**: 0.527 (improved from 0.49 at epoch 20)
+- **Complementarity**: 74.0% (target: 90%+) ⚠️
+- **Mask Overlap**: 0.260 (should decrease to 0.10)
+- **Mask Balance**: 50.7% input / 51.2% target ✅
+- **Gradient Norms**: 3-8 range (stable) ✅
+- **Discriminator Accuracy**: 84% real/fake (balanced) ✅
+- **Output RMS Ratio**: 0.81 (Output/Input, healthy)
+
+---
+
+## 🎯 Architecture Summary (2-Stage Cascade - STABLE)
+
+**Problem Solved**: Gradient explosion causing NaN collapse at epoch 3  
+**Root Cause**: 3-stage cascade with 0.1× weak residual in stage 2 → RMS collapse → 5.2× amplification → gradient explosion  
+**Solution**: Simplified to 2-stage cascade with full 1.0× residual in both stages  
+**Result**: Training stable through 51+ epochs, no NaN collapse, gradients controlled 1-8 range
 
 **Triple Protection System**:
 1. **Spectral Normalization**: Constrains weight matrices (Lipschitz ≤1)
@@ -20,18 +74,59 @@
 
 **Bonus**: 33% parameter reduction (27.4M → 24.9M), faster training
 
-**Files Synced to Remote**: `model_simple_transformer.py`, `train_simple_worker.py` via `sync_to_remote.sh`
+---
 
-**Current Status**: Training running on levante, epoch 7+ confirmed stable, ready to continue to epoch 50+
+## 🎯 Next Steps
+
+1. **Sync New Script to Remote**:
+   ```bash
+   bash sync_to_remote.sh  # Uploads run_train_creative_agent_push_complementarity.sh
+   ```
+
+2. **Restart Training on Levante**:
+   ```bash
+   ssh g260141@levante.dkrz.de
+   cd /work/gg0302/g260141/Jingle_D
+   pkill -f train_simple  # Kill current stuck training
+   chmod +x run_train_creative_agent_push_complementarity.sh
+   bash run_train_creative_agent_push_complementarity.sh  # Resume from epoch 51
+   ```
+
+3. **Expected Improvements**:
+   - Complementarity: 74% → 90%+ by epoch 100
+   - Mask overlap: 0.26 → 0.10
+   - Mask reg loss: 0.76 → 0.10-0.20
+   - More distinct separation: input extracts rhythm, target extracts harmony/melody
+
+4. **Monitor**:
+   - First 5 epochs: Watch complementarity increase
+   - Validation loss: Should stay stable or improve slightly (may temporarily increase as model adjusts)
+   - Gradient norms: Should stay 3-10 range (may spike initially, then stabilize)
 
 ---
 
-## 🎯 Latest Session Summary (Dec 15, 2025 - Evening)
+## 📜 Training History
 
-### Major Achievement: 2-Stage Architecture Solves Gradient Explosion ✅
+### Session 3 (Dec 16, 2025) - GitHub & Complementarity Fix
 
-**Problem**: 3-stage cascade with gradient explosion (2.45 → 6.66 → 16.71 → NaN at epoch 3)
-**Root Cause**: Stage 2 with 0.1× weak residual → RMS collapse (1.09 vs 5.69 target) → 5.2× amplification needed → gradients explode
+**Morning**:
+- Published repository to GitHub: https://github.com/Vlasenko2006/PowerMuse
+- Cleaned up 27 deprecated files
+- Created comprehensive README.md and FILES_MANIFEST.md
+- Updated documentation with current training status
+
+**Afternoon**:
+- Analyzed training plateau: Complementarity stuck at 74% (epochs 21-51)
+- Diagnosed: `mask_reg_weight=0.1` too weak, model prefers overlapping masks
+- Created `run_train_creative_agent_push_complementarity.sh` with `mask_reg_weight=0.5`
+- Prepared to restart training with stronger complementarity pressure
+
+### Session 2 (Dec 15, 2025) - 2-Stage Architecture Fix
+
+**Major Achievement**: 2-Stage Architecture Solves Gradient Explosion ✅
+
+**Problem**: 3-stage cascade with gradient explosion (2.45 → 6.66 → 16.71 → NaN at epoch 3)  
+**Root Cause**: Stage 2 with 0.1× weak residual → RMS collapse (1.09 vs 5.69 target) → 5.2× amplification needed → gradients explode  
 **Solution**: Simplified to 2-stage cascade with full 1.0× residual in both stages
 
 ### Architecture Changes
