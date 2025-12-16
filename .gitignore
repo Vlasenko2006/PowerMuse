@@ -72,6 +72,37 @@ bkup_*/
 *.tmp
 *.log
 
+# Old/deprecated scripts
+inference_sample.bak
+model_cascade.py
+pretrain_transformer.py
+run_train_alloc.sh
+run_train_compositional.sh
+run_train_creative_agent.sh
+run_train_direct.sh
+submit_compositional.sh
+submit_continuation.sh
+submit_frequency.sh
+submit_hybrid.sh
+submit_levante.sh
+upload_to_levante.sh
+test_args.py
+test_args.sh
+start_mlflow.py
+
+# Deprecated documentation
+RESIDUAL_ARCHITECTURE_CHANGE_old.md
+REFACTORING_SUMMARY.md
+MODULARIZATION_PLAN.md
+IMPLEMENTATION_SUMMARY.md
+CHECKLIST.md
+COMPOSITIONAL_AGENT_FIXES.md
+CREATIVE_AGENT_CHECKLIST.md
+CREATIVE_AGENT_SUMMARY.md
+TRAINING_SUMMARY_EPOCH20.md
+TRAINING_UPDATE_DEC14.md
+TRAINING_VISUALIZATION.md
+
 # Visualization outputs
 *.png
 *.jpg
