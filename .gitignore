@@ -1,0 +1,86 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# PyCharm
+.idea/
+
+# VSCode
+.vscode/
+
+# macOS
+.DS_Store
+
+# Checkpoints and training outputs
+checkpoints/
+best_checkpoints/
+best_model.pt
+*.pt
+*.pth
+*.ckpt
+
+# Dataset files (large audio data)
+dataset/
+dataset_pairs_wav/
+dataset_encoded_expanded/
+harmony/
+melody/
+rythm/
+treble/
+validation_samples/
+workig_mix/
+
+# Inference outputs
+inference_outputs/
+*.wav
+*.mp3
+
+# MLflow tracking
+mlruns/
+mlruns_remote/
+
+# Temporary and backup files
+bkup/
+bkup_*/
+14122025_2356/
+*.bak
+*.tmp
+*.log
+
+# Visualization outputs
+*.png
+*.jpg
+*.jpeg
+
+# SLURM outputs
+slurm-*.out
+*.out
+
+# Shell history
+.bash_history
+.zsh_history
