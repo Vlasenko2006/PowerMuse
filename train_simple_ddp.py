@@ -124,6 +124,12 @@ def main():
     parser.add_argument('--disc_update_freq', type=int, default=1,
                        help='Update discriminator every N batches (1=every batch, higher for stability)')
     
+    # Pure GAN mode (curriculum learning from music-to-music → noise-to-music)
+    parser.add_argument('--pure_gan_mode', type=float, default=0.0,
+                       help='Curriculum learning rate: transition from music to noise. 0.0=disabled, 0.01=full noise after 100 epochs')
+    parser.add_argument('--gan_curriculum_start_epoch', type=int, default=0,
+                       help='Epoch to start GAN curriculum (allows pre-training on music before transitioning to noise)')
+    
     args = parser.parse_args()
     
     # Create checkpoint directory

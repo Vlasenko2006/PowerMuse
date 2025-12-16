@@ -156,13 +156,48 @@ def train_epoch(model, encodec_model, dataloader, optimizer, device, rank, epoch
                 input_audio = encodec_model.decoder(inputs)  # inputs is [B, D, T], decoder outputs [B, 1, samples]
                 targets = input_audio
         
-        # Get input audio for combined loss
-        with torch.no_grad():
-            input_audio = encodec_model.decoder(inputs)  # [B, 1, samples]
+        # Store original clean inputs/targets for loss computation
+        original_inputs = inputs.clone()
+        original_targets = targets.clone()
+        
+        # Pure GAN mode: Curriculum learning from music-to-music → noise-to-music
+        if pure_gan_mode > 0:
+            # Compute interpolation coefficient: α = min(1.0, pure_gan_mode × counter)
+            # pure_gan_mode: rate of transition (e.g., 0.01 = full noise after 100 epochs)
+            # counter: cumulative epochs since start of curriculum
+            alpha = min(1.0, pure_gan_mode * gan_curriculum_counter)
             
-            # For cascade mode, encode target audio
+            if alpha > 0:
+                with torch.no_grad():
+                    # Generate noise with same statistics as real data (PER-SAMPLE)
+                    # inputs: [B, D, T], compute std per sample along (D, T) dimensions
+                    input_std = inputs.std(dim=(1, 2), keepdim=True)  # [B, 1, 1]
+                    target_std = targets.std(dim=(1, 2), keepdim=True)  # [B, 1, 1]
+                    
+                    input_noise = torch.randn_like(inputs) * input_std
+                    target_noise = torch.randn_like(targets) * target_std
+                    
+                    # Interpolate: (1-α) × real + α × noise
+                    inputs = (1.0 - alpha) * inputs + alpha * input_noise
+                    targets = (1.0 - alpha) * targets + alpha * target_noise
+                    
+                    # Debug: Print curriculum status on first batch
+                    if num_batches == 0 and rank == 0:
+                        print(f"\n🎲 Pure GAN Curriculum Learning:")
+                        print(f"  Alpha: {alpha:.4f} (0=music, 1=noise)")
+                        print(f"  Input:  {(1-alpha)*100:.1f}% music + {alpha*100:.1f}% noise")
+                        print(f"  Target: {(1-alpha)*100:.1f}% music + {alpha*100:.1f}% noise")
+                        if alpha >= 1.0:
+                            print(f"  ✓ Full noise mode achieved!")
+                        print()
+        
+        # Get input audio for combined loss (using ORIGINAL clean inputs)
+        with torch.no_grad():
+            input_audio = encodec_model.decoder(original_inputs)  # [B, 1, samples]
+            
+            # For cascade mode, encode target audio (potentially noisy for model)
             if model.module.num_transformer_layers > 1:
-                encoded_target = encodec_model.encoder(targets)  # [B, D, T_enc]
+                encoded_target = encodec_model.encoder(targets)  # [B, D, T_enc] - may be noisy
                 
                 # Apply complementary masking if enabled
                 if mask_type != 'none':
@@ -201,9 +236,10 @@ def train_epoch(model, encodec_model, dataloader, optimizer, device, rank, epoch
         # Decode to audio space for loss computation
         output_audio = encodec_model.decoder(encoded_output)  # [B, 1, samples]
         
-        # Combined loss with all components (including correlation penalty)
+        # Combined loss with all components (using ORIGINAL clean inputs/targets)
+        # Important: Loss always compares to real audio, not noise
         loss, rms_input, rms_target, spectral, mel_value, corr_penalty = combined_loss(
-            output_audio, input_audio, targets, 
+            output_audio, input_audio, original_targets,  # Use original_targets, not noisy 
             loss_weight_input, loss_weight_target, 
             loss_weight_spectral, loss_weight_mel,
             weight_correlation=corr_weight
@@ -554,9 +590,10 @@ def validate_epoch(model, encodec_model, dataloader, device, rank, epoch,
                 first_target_audio = targets[0, 0].cpu()  # [samples]
                 first_output_audio = output_audio[0, 0].cpu()  # [samples]
             
-            # Combined loss with all components (including correlation penalty)
+            # Combined loss with all components (using ORIGINAL clean inputs/targets)
+            # Important: Loss always compares to real audio, not noise
             loss, rms_input, rms_target, spectral, mel_value, corr_penalty = combined_loss(
-                output_audio, input_audio, targets,
+                output_audio, input_audio, original_targets,  # Use original_targets, not noisy
                 loss_weight_input, loss_weight_target,
                 loss_weight_spectral, loss_weight_mel,
                 weight_correlation=corr_weight
@@ -864,6 +901,7 @@ def train_worker(rank, world_size, args):
     start_epoch = 0
     best_val_loss = float('inf')
     patience_counter = 0
+    gan_curriculum_counter = 0  # Track epochs for pure GAN curriculum learning
     
     if args.resume:
         if rank == 0:
@@ -912,6 +950,12 @@ def train_worker(rank, world_size, args):
         # Set epoch for distributed sampler
         train_sampler.set_epoch(epoch)
         
+        # Update GAN curriculum counter
+        if epoch >= args.gan_curriculum_start_epoch:
+            gan_curriculum_counter = epoch - args.gan_curriculum_start_epoch + 1
+        else:
+            gan_curriculum_counter = 0
+        
         # Train
         train_loss, train_rms_input, train_rms_target, train_spectral, train_mel, train_corr_penalty, train_creative, gan_metrics = train_epoch(
             model, encodec_model, train_loader, optimizer,
@@ -931,7 +975,9 @@ def train_worker(rank, world_size, args):
             disc_optimizer=disc_optimizer,
             gan_weight=args.gan_weight,
             disc_update_freq=args.disc_update_freq,
-            corr_weight=args.corr_weight
+            corr_weight=args.corr_weight,
+            pure_gan_mode=args.pure_gan_mode,
+            gan_curriculum_counter=gan_curriculum_counter
         )
         
         # Validate
