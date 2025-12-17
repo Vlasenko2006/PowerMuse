@@ -4,8 +4,8 @@
 class MusicLab {
     constructor() {
         this.tracks = {
-            1: { audio: null, buffer: null, source: null, duration: 0, isPlaying: false, file: null },
-            2: { audio: null, buffer: null, source: null, duration: 0, isPlaying: false, file: null }
+            1: { audio: null, buffer: null, source: null, gainNode: null, duration: 0, isPlaying: false, file: null },
+            2: { audio: null, buffer: null, source: null, gainNode: null, duration: 0, isPlaying: false, file: null }
         };
         
         this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -395,13 +395,15 @@ class MusicLab {
         track.source.buffer = track.buffer;
         
         // Create gain node for volume
-        const gainNode = this.audioContext.createGain();
+        track.gainNode = this.audioContext.createGain();
         const volume = document.getElementById(`volume-${trackNum}`).value / 100;
-        gainNode.gain.value = volume;
+        track.gainNode.gain.value = volume;
+        
+        console.log(`[VOLUME] Track ${trackNum} - Set volume to ${(volume * 100).toFixed(0)}%`);
         
         // Connect
-        track.source.connect(gainNode);
-        gainNode.connect(this.audioContext.destination);
+        track.source.connect(track.gainNode);
+        track.gainNode.connect(this.audioContext.destination);
         
         // Play
         track.source.start(0, startTime, duration);
@@ -453,6 +455,11 @@ class MusicLab {
             track.source = null;
         }
         
+        if (track.gainNode) {
+            track.gainNode.disconnect();
+            track.gainNode = null;
+        }
+        
         console.log(`[STOP] Track ${trackNum} - Playback stopped`);
         
         track.isPlaying = false;
@@ -491,7 +498,11 @@ class MusicLab {
     }
     
     setVolume(trackNum, value) {
-        // Volume will be applied on next play
+        const track = this.tracks[trackNum];
+        if (track.gainNode) {
+            track.gainNode.gain.value = value / 100;
+            console.log(`[VOLUME] Track ${trackNum} - Volume changed to ${value}%`);
+        }
     }
     
     previewSelection(trackNum) {
