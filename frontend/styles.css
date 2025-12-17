@@ -439,9 +439,9 @@ body {
     position: absolute;
     top: 0;
     height: 100%;
-    background-color: rgba(99, 102, 241, 0.2);
-    border-left: 2px solid var(--primary);
-    border-right: 2px solid var(--primary);
+    background-color: rgba(251, 191, 36, 0.25);
+    border-left: 2px solid #fbbf24;
+    border-right: 2px solid #fbbf24;
     pointer-events: none;
     transition: all 0.1s ease;
 }
