@@ -612,6 +612,43 @@ async def get_chat_session_info(session_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/examples/{example_name}")
+async def get_example_audio(example_name: str):
+    """
+    Serve example audio files for the Examples modal
+    
+    Allowed files: input.wav, target.wav, output.wav
+    """
+    # Validate example name
+    allowed_files = {
+        'input': 'input.wav',
+        'target': '1_noisy_target.wav',
+        'output': '1_predicted.wav'
+    }
+    
+    if example_name not in allowed_files:
+        raise HTTPException(status_code=404, detail="Example not found")
+    
+    # Construct path to music_samples folder
+    music_samples_dir = os.path.join(parent_dir, 'music_samples')
+    file_path = os.path.join(music_samples_dir, allowed_files[example_name])
+    
+    # Check if file exists
+    if not os.path.exists(file_path):
+        logger.error(f"Example file not found: {file_path}")
+        raise HTTPException(status_code=404, detail="Example file not found")
+    
+    # Return file with proper headers
+    return FileResponse(
+        file_path,
+        media_type="audio/wav",
+        headers={
+            "Content-Disposition": f'inline; filename="{allowed_files[example_name]}"',
+            "Access-Control-Allow-Origin": "*"
+        }
+    )
+
+
 if __name__ == "__main__":
     import uvicorn
     

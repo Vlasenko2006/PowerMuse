@@ -1126,14 +1126,14 @@ class ExamplesPlayer {
 
     async loadAllExamples() {
         const examples = [
-            { id: 'input', path: '../music_samples/input.wav' },
-            { id: 'target', path: '../music_samples/1_noisy_target.wav' },
-            { id: 'output', path: '../music_samples/1_predicted.wav' }
+            { id: 'input', name: 'input' },
+            { id: 'target', name: 'target' },
+            { id: 'output', name: 'output' }
         ];
 
         for (const example of examples) {
             try {
-                const response = await fetch(example.path);
+                const response = await fetch(`http://localhost:8001/api/examples/${example.name}`);
                 const arrayBuffer = await response.arrayBuffer();
                 const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
                 this.examples[example.id].buffer = audioBuffer;
