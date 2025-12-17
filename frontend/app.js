@@ -298,20 +298,27 @@ class MusicLab {
         // Update UI
         this.updatePlayButton(trackNum, true);
         
-        // Update time display
-        const startTimestamp = Date.now();
+        // Update time display and waveform progress
+        track.startTimestamp = Date.now();
+        track.startTimeOffset = startTime;
+        track.playDuration = duration;
+        
         const updateTime = () => {
-            if (track.isPlaying) {
-                const elapsed = (Date.now() - startTimestamp) / 1000;
-                document.getElementById(`current-time-${trackNum}`).textContent = 
-                    this.formatTime(startTime + Math.min(elapsed, duration));
-                
-                // Update waveform progress
-                const progress = Math.min(elapsed / duration, 1);
-                this.updateWaveformProgress(trackNum, progress);
-                
-                requestAnimationFrame(updateTime);
+            if (!track.isPlaying) return;
+            
+            const elapsed = (Date.now() - track.startTimestamp) / 1000;
+            const currentTime = track.startTimeOffset + Math.min(elapsed, track.playDuration);
+            
+            const currentTimeEl = document.getElementById(`current-time-${trackNum}`);
+            if (currentTimeEl) {
+                currentTimeEl.textContent = this.formatTime(currentTime);
             }
+            
+            // Update waveform progress
+            const progress = Math.min(elapsed / track.playDuration, 1);
+            this.updateWaveformProgress(trackNum, progress);
+            
+            track.animationFrame = requestAnimationFrame(updateTime);
         };
         updateTime();
         
@@ -338,8 +345,19 @@ class MusicLab {
         }
         
         track.isPlaying = false;
+        
+        // Cancel animation frame
+        if (track.animationFrame) {
+            cancelAnimationFrame(track.animationFrame);
+            track.animationFrame = null;
+        }
+        
         this.updatePlayButton(trackNum, false);
-        document.getElementById(`current-time-${trackNum}`).textContent = '0:00';
+        
+        const currentTimeEl = document.getElementById(`current-time-${trackNum}`);
+        if (currentTimeEl) {
+            currentTimeEl.textContent = '0:00';
+        }
         
         // Reset waveform to show no progress
         if (track.audio) {
