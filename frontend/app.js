@@ -223,7 +223,7 @@ class MusicLab {
 
         const ctx = canvas.getContext('2d');
         
-        // Set canvas size
+        // Set canvas size (same as drawWaveform)
         canvas.width = canvas.offsetWidth * window.devicePixelRatio;
         canvas.height = canvas.offsetHeight * window.devicePixelRatio;
         ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
@@ -293,7 +293,7 @@ class MusicLab {
             
             // Draw progress line
             ctx.strokeStyle = '#00d4aa';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.moveTo(progressAbsoluteX, 0);
             ctx.lineTo(progressAbsoluteX, height);
