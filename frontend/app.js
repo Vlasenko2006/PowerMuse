@@ -1165,11 +1165,13 @@ class MusicChatbot {
     async clearSession() {
         try {
             await fetch(`${this.API_URL}/api/chat/${this.sessionId}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                keepalive: true  // Allows request to complete during page unload
             });
             console.log('[Chatbot] Session cleared');
         } catch (error) {
-            console.error('[Chatbot] Error clearing session:', error);
+            // Silently fail during page unload - this is expected behavior
+            // The browser may cancel the request, which is okay
         }
     }
 }
