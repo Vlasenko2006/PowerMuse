@@ -897,7 +897,218 @@ class MusicLab {
     }
 }
 
+// ========================================
+// MusicNote Chatbot
+// ========================================
+
+class MusicChatbot {
+    constructor() {
+        this.API_URL = 'http://localhost:8001';
+        this.sessionId = this.generateSessionId();
+        this.isOpen = false;
+        
+        this.trigger = document.getElementById('chatbot-trigger');
+        this.window = document.getElementById('chatbot-window');
+        this.closeBtn = document.getElementById('chatbot-close');
+        this.messagesContainer = document.getElementById('chatbot-messages');
+        this.input = document.getElementById('chatbot-input');
+        this.sendBtn = document.getElementById('chatbot-send');
+        
+        this.setupEventListeners();
+        this.setupBeforeUnload();
+        
+        console.log('[Chatbot] Initialized with session:', this.sessionId);
+    }
+    
+    generateSessionId() {
+        return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+    
+    setupEventListeners() {
+        this.trigger.addEventListener('click', () => this.toggle());
+        this.closeBtn.addEventListener('click', () => this.close());
+        this.sendBtn.addEventListener('click', () => this.sendMessage());
+        
+        this.input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.sendMessage();
+            }
+        });
+    }
+    
+    setupBeforeUnload() {
+        // Clear chat history when user closes browser/tab
+        window.addEventListener('beforeunload', () => {
+            this.clearSession();
+        });
+    }
+    
+    toggle() {
+        if (this.isOpen) {
+            this.close();
+        } else {
+            this.open();
+        }
+    }
+    
+    open() {
+        this.window.classList.add('active');
+        this.isOpen = true;
+        this.input.focus();
+        console.log('[Chatbot] Opened');
+    }
+    
+    close() {
+        this.window.classList.remove('active');
+        this.isOpen = false;
+        console.log('[Chatbot] Closed');
+    }
+    
+    async sendMessage() {
+        const message = this.input.value.trim();
+        if (!message) return;
+        
+        // Clear input
+        this.input.value = '';
+        
+        // Add user message to UI
+        this.addMessage(message, 'user');
+        
+        // Show typing indicator
+        const typingIndicator = this.showTyping();
+        
+        try {
+            // Send to API
+            const formData = new FormData();
+            formData.append('session_id', this.sessionId);
+            formData.append('message', message);
+            
+            const response = await fetch(`${this.API_URL}/api/chat`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                throw new Error(`API error: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            // Remove typing indicator
+            this.removeTyping(typingIndicator);
+            
+            // Add bot response
+            if (data.status === 'success') {
+                this.addMessage(data.response, 'bot');
+                console.log('[Chatbot] Exchange count:', data.history_length);
+            } else {
+                this.addMessage('Sorry, I encountered an error. Please try again! 🎵', 'bot');
+            }
+            
+        } catch (error) {
+            console.error('[Chatbot] Error:', error);
+            this.removeTyping(typingIndicator);
+            this.addMessage('Oops! Connection error. Make sure the server is running. 🎵', 'bot');
+        }
+    }
+    
+    addMessage(content, type) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `chat-message ${type}-message`;
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+        contentDiv.innerHTML = content.replace(/\n/g, '<br>');
+        
+        messageDiv.appendChild(contentDiv);
+        this.messagesContainer.appendChild(messageDiv);
+        
+        // Scroll to bottom
+        this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+    }
+    
+    showTyping() {
+        const typingDiv = document.createElement('div');
+        typingDiv.className = 'chat-message bot-message';
+        typingDiv.id = 'typing-indicator';
+        
+        const typingContent = document.createElement('div');
+        typingContent.className = 'message-content chat-typing';
+        typingContent.innerHTML = `
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+        `;
+        
+        typingDiv.appendChild(typingContent);
+        this.messagesContainer.appendChild(typingDiv);
+        this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+        
+        return typingDiv;
+    }
+    
+    removeTyping(typingElement) {
+        if (typingElement && typingElement.parentNode) {
+            typingElement.parentNode.removeChild(typingElement);
+        }
+    }
+    
+    async clearSession() {
+        try {
+            await fetch(`${this.API_URL}/api/chat/${this.sessionId}`, {
+                method: 'DELETE'
+            });
+            console.log('[Chatbot] Session cleared');
+        } catch (error) {
+            console.error('[Chatbot] Error clearing session:', error);
+        }
+    }
+}
+
+// About Modal Functionality
+function initializeAboutModal() {
+    const modal = document.getElementById('about-modal');
+    const btn = document.getElementById('about-btn');
+    const closeBtn = document.querySelector('.modal-close');
+    const gotItBtn = document.querySelector('.modal-btn');
+
+    if (!modal || !btn) return;
+
+    // Open modal
+    btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        modal.style.display = 'block';
+        document.body.style.overflow = 'hidden'; // Prevent background scrolling
+    });
+
+    // Close modal functions
+    const closeModal = () => {
+        modal.style.display = 'none';
+        document.body.style.overflow = 'auto'; // Restore scrolling
+    };
+
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    if (gotItBtn) gotItBtn.addEventListener('click', closeModal);
+
+    // Close when clicking outside the modal content
+    window.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            closeModal();
+        }
+    });
+
+    // Close with Escape key
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && modal.style.display === 'block') {
+            closeModal();
+        }
+    });
+}
+
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     window.musicLab = new MusicLab();
+    window.musicChatbot = new MusicChatbot();
+    initializeAboutModal();
 });

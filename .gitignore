@@ -36,6 +36,9 @@ env/
 # macOS
 .DS_Store
 
+# Sensitive configuration files
+config/config_key.yaml
+
 # Checkpoints and training outputs
 checkpoints/
 best_checkpoints/

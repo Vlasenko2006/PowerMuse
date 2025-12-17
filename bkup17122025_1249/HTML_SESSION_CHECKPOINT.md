@@ -1,9 +1,9 @@
 # HTML Session Checkpoint - MusicLab Frontend
 
 **Date:** December 17, 2025  
-**Last Updated:** December 17, 2025 - Backend Integration Complete  
-**Files:** `frontend/index.html`, `frontend/app.js`, `frontend/styles.css`  
-**Session Focus:** Logo refinements + Full backend API integration
+**Last Updated:** December 17, 2025 - All Bugs Fixed  
+**Files:** `frontend/index.html`, `frontend/app.js`, `frontend/styles.css`, `backend/main_api.py`  
+**Session Focus:** Logo refinements + Backend integration + Critical bug fixes
 
 ---
 
@@ -291,15 +291,74 @@ Add: `margin-top` to `.logo-icon` for fine-tuning
 
 ---
 
+#### Phase 3: Critical Bug Fixes (Messages 78-95)
+
+**Bug 1: Sliding Window Not Working**
+- **Issue:** Music patterns always started from 0:00 regardless of time window selection
+- **Root Cause:** API parameter mismatch - backend accepted 2 time params (start_time, end_time) but frontend sent 4 (start_time_1, end_time_1, start_time_2, end_time_2)
+- **Solution:** Updated backend API signature to accept separate time windows for each track
+- **Files:** backend/main_api.py lines 413-476, 250-298
+- ✅ **Fixed:** Audio segments now extracted from correct time positions
+
+**Bug 2: Downloaded File 0 Bytes**
+- **Issue:** Downloaded WAV file was empty (0 bytes)
+- **Root Cause:** JavaScript ArrayBuffer transferred/consumed by decodeAudioData(), leaving empty buffer for Blob
+- **Investigation:** Console showed `ArrayBuffer size: 768044 bytes` but `Blob created, size: 0 bytes`
+- **Solution:** Create Blob BEFORE decoding, then clone ArrayBuffer for decoding
+- **Code Fix:**
+```javascript
+// Before (wrong):
+const arrayBuffer = await response.arrayBuffer();
+this.resultAudio = await this.audioContext.decodeAudioData(arrayBuffer);
+this.resultBlob = new Blob([arrayBuffer], ...); // arrayBuffer is empty!
+
+// After (correct):
+const arrayBuffer = await response.arrayBuffer();
+this.resultBlob = new Blob([arrayBuffer], ...); // Create first
+const arrayBufferCopy = arrayBuffer.slice(0); // Clone
+this.resultAudio = await this.audioContext.decodeAudioData(arrayBufferCopy);
+```
+- **Files:** frontend/app.js lines 635-646
+- ✅ **Fixed:** Download now works with full 768KB file
+
+**Bug 3: Generated Audio Won't Play After Regeneration**
+- **Issue:** First generation plays correctly, but second generation starts then immediately stops
+- **Root Cause:** Duplicate event listeners added every time music was generated
+- **Investigation:** Console showed `[DEBUG] Audio source started successfully` followed immediately by `[DEBUG] Stopped`
+- **Solution:** Clone-and-replace buttons to remove old listeners before adding new ones
+- **Code Fix:**
+```javascript
+// Prevent duplicate listeners with flag and node replacement
+if (!this.resultListenersSetup) {
+    const playBtnNew = playBtn.cloneNode(true);
+    playBtn.parentNode.replaceChild(playBtnNew, playBtn);
+    // Add listeners to new node
+    this.resultListenersSetup = true;
+}
+```
+- **Files:** frontend/app.js lines 601-626
+- ✅ **Fixed:** Playback works correctly on all regenerations
+
+**Bug 4: Track A/B Play Buttons Don't Work**
+- **Issue:** Track play buttons start audio but immediately stop it
+- **Root Cause 1:** AudioContext suspended (browser autoplay policy)
+- **Root Cause 2:** Duplicate event listeners (same as Bug 3)
+- **Solution:** 
+  1. Made playTrack() async and resume AudioContext before playback
+  2. Added listenersSetup flag and clone-replace technique for track buttons
+- **Files:** frontend/app.js lines 220-251, 242-262
+- ✅ **Fixed:** All track playback buttons now work correctly
+
 ## Status
 
-✅ **Complete:** Logo icon design finalized with beamed eighth notes  
+✅ **Complete:** Logo icon design finalized with beamed eighth notes (38px)
 ✅ **Complete:** ViewBox optimized to prevent clipping  
-✅ **Complete:** Stem length, beam size, and positioning refined  
-✅ **Complete:** Icon size adjusted to prevent bottom cutoff  
-✅ **Complete:** Notes positioned close to cube for unified appearance  
+✅ **Complete:** Backend API fully integrated (7 endpoints)
+✅ **Complete:** Sliding window functionality working correctly
+✅ **Complete:** Download system working (768KB WAV files)
+✅ **Complete:** Playback system working for all tracks
+✅ **Complete:** Duplicate listener issues resolved
+✅ **Complete:** AudioContext autoplay policy handled
+✅ **Complete:** All debugging logs added for troubleshooting
 
-**Next potential adjustments:**
-- Fine-tune vertical alignment with "MusicLab" text if needed
-- Adjust transform Y value to perfect notes-to-cube spacing
-- Consider adding subtle shadow or glow effects (CSS)
+**System Ready:** Full end-to-end music generation pipeline operational

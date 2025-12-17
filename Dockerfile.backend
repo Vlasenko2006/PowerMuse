@@ -1,0 +1,41 @@
+# Backend Dockerfile for MusicLab
+FROM python:3.10-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libsndfile1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY backend/requirements.txt ./backend/
+RUN pip install --no-cache-dir -r backend/requirements.txt
+
+# Copy application files
+COPY backend/ ./backend/
+COPY config/ ./config/
+COPY checkpoints/ ./checkpoints/
+COPY model_simple_transformer.py ./
+COPY complementary_masking.py ./
+COPY audio_discriminator.py ./
+COPY correlation_penalty.py ./
+
+# Create directory for uploaded files
+RUN mkdir -p /app/uploads
+
+# Expose port
+EXPOSE 8001
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:8001/health')"
+
+# Run the application
+CMD ["python", "backend/main_api.py"]

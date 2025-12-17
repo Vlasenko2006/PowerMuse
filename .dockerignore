@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+
+# Logs
+*.log
+backend_chatbot.log
+startup_test.log
+
+# Datasets and outputs (too large)
+dataset/
+dataset_pairs_wav/
+inference_outputs/
+training/
+melody/
+harmony/
+rythm/
+treble/
+
+# Backups
+bkup/
+bkup_*/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Temp files
+*.tmp
+/tmp/
+
+# Documentation
+*.md
+!README.md
+
+# Scripts (not needed in container)
+*.sh
+upload_to_levante.sh
+sync_to_remote.sh
+verify_sync.sh
+
+# Test files
+test_*.py
+debug_*.py
+
+# Other
+.env
+*.bak
