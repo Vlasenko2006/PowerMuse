@@ -301,9 +301,9 @@ class MusicLab {
         }
         
         // Redraw selection overlay
-        const startTime = parseFloat(document.getElementById(`start-time-${trackNum}`).value);
-        const endTime = parseFloat(document.getElementById(`end-time-${trackNum}`).value);
-        this.updateSelectionOverlay(trackNum, startTime, endTime);
+        const selectionStart = parseFloat(document.getElementById(`start-time-${trackNum}`).value);
+        const selectionEnd = parseFloat(document.getElementById(`end-time-${trackNum}`).value);
+        this.updateSelectionOverlay(trackNum, selectionStart, selectionEnd);
     }
     
     // ========================================
