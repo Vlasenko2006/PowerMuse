@@ -236,6 +236,19 @@ class MusicLab {
         const step = Math.ceil(data.length / width);
         const amp = height / 2;
         
+        // Get time window info
+        const startTime = track.startTimeOffset || 0;
+        const duration = track.duration;
+        const startPercent = startTime / duration;
+        const playDuration = track.playDuration || duration;
+        const endPercent = (startTime + playDuration) / duration;
+        
+        // Calculate pixel positions for time window
+        const windowStartX = Math.floor(width * startPercent);
+        const windowWidth = Math.floor(width * (endPercent - startPercent));
+        const progressInWindow = Math.floor(windowWidth * progress);
+        const progressAbsoluteX = windowStartX + progressInWindow;
+        
         // Clear canvas
         ctx.clearRect(0, 0, width, height);
         
@@ -257,19 +270,18 @@ class MusicLab {
         
         ctx.stroke();
         
-        // Draw progress overlay
-        const progressX = Math.floor(width * progress);
-        if (progressX > 0) {
+        // Draw progress overlay (from window start to current position)
+        if (progressInWindow > 0) {
             ctx.beginPath();
             ctx.strokeStyle = '#00d4aa';
             ctx.lineWidth = 2;
             ctx.globalAlpha = 0.6;
             
-            for (let i = 0; i < progressX; i++) {
+            for (let i = windowStartX; i < progressAbsoluteX; i++) {
                 const min = Math.min(...data.slice(i * step, (i + 1) * step));
                 const max = Math.max(...data.slice(i * step, (i + 1) * step));
                 
-                if (i === 0) {
+                if (i === windowStartX) {
                     ctx.moveTo(i, (1 + min) * amp);
                 }
                 ctx.lineTo(i, (1 + max) * amp);
@@ -283,8 +295,8 @@ class MusicLab {
             ctx.strokeStyle = '#00d4aa';
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.moveTo(progressX, 0);
-            ctx.lineTo(progressX, height);
+            ctx.moveTo(progressAbsoluteX, 0);
+            ctx.lineTo(progressAbsoluteX, height);
             ctx.stroke();
         }
         
@@ -332,7 +344,10 @@ class MusicLab {
         if (this.tracks[trackNum].isPlaying) {
             this.stopTrack(trackNum);
         } else {
-            this.playTrack(trackNum);
+            // Read time window from UI
+            const startTime = parseFloat(document.getElementById(`start-time-${trackNum}`).value);
+            const endTime = parseFloat(document.getElementById(`end-time-${trackNum}`).value);
+            this.playTrack(trackNum, startTime, endTime);
         }
     }
     
