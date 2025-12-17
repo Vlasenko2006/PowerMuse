@@ -344,10 +344,8 @@ class MusicLab {
         if (this.tracks[trackNum].isPlaying) {
             this.stopTrack(trackNum);
         } else {
-            // Read time window from UI
-            const startTime = parseFloat(document.getElementById(`start-time-${trackNum}`).value);
-            const endTime = parseFloat(document.getElementById(`end-time-${trackNum}`).value);
-            this.playTrack(trackNum, startTime, endTime);
+            // Play full track from beginning
+            this.playTrack(trackNum, 0, null);
         }
     }
     
