@@ -213,6 +213,86 @@ class MusicLab {
         overlay.style.left = `${startPercent}%`;
         overlay.style.width = `${widthPercent}%`;
     }
+
+    updateWaveformProgress(trackNum, progress) {
+        const canvas = document.getElementById(`waveform-${trackNum}`);
+        if (!canvas) return;
+
+        const track = this.tracks[trackNum];
+        if (!track.audio) return;
+
+        const ctx = canvas.getContext('2d');
+        
+        // Set canvas size
+        canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+        canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+        ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        
+        const width = canvas.offsetWidth;
+        const height = canvas.offsetHeight;
+        
+        // Get audio data
+        const data = track.audio.getChannelData(0);
+        const step = Math.ceil(data.length / width);
+        const amp = height / 2;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, width, height);
+        
+        // Draw base waveform
+        ctx.beginPath();
+        ctx.strokeStyle = '#6366f1';
+        ctx.lineWidth = 2;
+        
+        for (let i = 0; i < width; i++) {
+            const min = Math.min(...data.slice(i * step, (i + 1) * step));
+            const max = Math.max(...data.slice(i * step, (i + 1) * step));
+            
+            if (i === 0) {
+                ctx.moveTo(i, (1 + min) * amp);
+            }
+            ctx.lineTo(i, (1 + max) * amp);
+            ctx.lineTo(i, (1 + min) * amp);
+        }
+        
+        ctx.stroke();
+        
+        // Draw progress overlay
+        const progressX = Math.floor(width * progress);
+        if (progressX > 0) {
+            ctx.beginPath();
+            ctx.strokeStyle = '#00d4aa';
+            ctx.lineWidth = 2;
+            ctx.globalAlpha = 0.6;
+            
+            for (let i = 0; i < progressX; i++) {
+                const min = Math.min(...data.slice(i * step, (i + 1) * step));
+                const max = Math.max(...data.slice(i * step, (i + 1) * step));
+                
+                if (i === 0) {
+                    ctx.moveTo(i, (1 + min) * amp);
+                }
+                ctx.lineTo(i, (1 + max) * amp);
+                ctx.lineTo(i, (1 + min) * amp);
+            }
+            
+            ctx.stroke();
+            ctx.globalAlpha = 1.0;
+            
+            // Draw progress line
+            ctx.strokeStyle = '#00d4aa';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(progressX, 0);
+            ctx.lineTo(progressX, height);
+            ctx.stroke();
+        }
+        
+        // Redraw selection overlay
+        const startTime = parseFloat(document.getElementById(`start-time-${trackNum}`).value);
+        const endTime = parseFloat(document.getElementById(`end-time-${trackNum}`).value);
+        this.updateSelectionOverlay(trackNum, startTime, endTime);
+    }
     
     // ========================================
     // Player Controls
