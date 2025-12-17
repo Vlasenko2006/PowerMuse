@@ -1653,3 +1653,208 @@ body {
         grid-template-columns: 1fr;
     }
 }
+
+/* Examples Modal Styles */
+.example-container {
+    margin-top: 2rem;
+}
+
+.example-inputs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.example-output {
+    margin-bottom: 1.5rem;
+}
+
+.example-track {
+    background: rgba(20, 24, 36, 0.4);
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    border-radius: 12px;
+    padding: 1rem;
+    transition: all 0.3s ease;
+}
+
+.example-track:hover {
+    border-color: rgba(102, 126, 234, 0.5);
+    background: rgba(20, 24, 36, 0.6);
+}
+
+.example-track-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.example-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #8b9aff;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.output-label {
+    color: #00d4aa;
+}
+
+.example-duration {
+    font-size: 0.85rem;
+    color: #b8c1ec;
+    opacity: 0.7;
+}
+
+.example-waveform {
+    width: 100%;
+    height: 80px;
+    background: rgba(10, 12, 20, 0.6);
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+    display: block;
+}
+
+.example-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.example-controls .btn-icon {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    padding: 0;
+}
+
+.example-controls .btn-icon:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.example-controls .btn-icon:active {
+    transform: scale(0.95);
+}
+
+.example-controls .btn-icon svg {
+    width: 16px;
+    height: 16px;
+}
+
+.example-controls .time-display {
+    font-size: 0.85rem;
+    color: #b8c1ec;
+    font-family: 'Courier New', monospace;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.example-controls .time-separator {
+    opacity: 0.5;
+}
+
+.example-controls .volume-control {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: auto;
+}
+
+.example-controls .icon-volume {
+    width: 20px;
+    height: 20px;
+    color: #8b9aff;
+}
+
+.example-controls .volume-slider {
+    width: 80px;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(139, 154, 255, 0.2);
+    border-radius: 2px;
+    outline: none;
+}
+
+.example-controls .volume-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #8b9aff;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.example-controls .volume-slider::-webkit-slider-thumb:hover {
+    background: #a5b8ff;
+    transform: scale(1.2);
+}
+
+.example-controls .volume-slider::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #8b9aff;
+    cursor: pointer;
+    border: none;
+    transition: all 0.3s ease;
+}
+
+.example-controls .volume-slider::-moz-range-thumb:hover {
+    background: #a5b8ff;
+    transform: scale(1.2);
+}
+
+.example-description {
+    color: #b8c1ec;
+    line-height: 1.6;
+    font-size: 0.95rem;
+    padding: 1rem;
+    background: rgba(139, 154, 255, 0.05);
+    border-left: 3px solid #667eea;
+    border-radius: 4px;
+}
+
+.modal-close-examples {
+    color: #b8c1ec;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: color 0.3s ease;
+}
+
+.modal-close-examples:hover,
+.modal-close-examples:focus {
+    color: #ffffff;
+    text-decoration: none;
+}
+
+/* Examples Modal Mobile Styles */
+@media (max-width: 768px) {
+    .example-inputs {
+        grid-template-columns: 1fr;
+    }
+    
+    .example-waveform {
+        height: 60px;
+    }
+    
+    .example-controls .volume-control {
+        display: none;
+    }
+}

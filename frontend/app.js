@@ -1106,9 +1106,307 @@ function initializeAboutModal() {
     });
 }
 
+// Examples Modal Player Class
+class ExamplesPlayer {
+    constructor() {
+        this.audioContext = null;
+        this.examples = {
+            input: { buffer: null, source: null, gainNode: null, isPlaying: false },
+            target: { buffer: null, source: null, gainNode: null, isPlaying: false },
+            output: { buffer: null, source: null, gainNode: null, isPlaying: false }
+        };
+        this.animationFrames = {};
+    }
+
+    async initialize() {
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        await this.loadAllExamples();
+        this.setupControlListeners();
+    }
+
+    async loadAllExamples() {
+        const examples = [
+            { id: 'input', path: '../music_samples/input.wav' },
+            { id: 'target', path: '../music_samples/1_noisy_target.wav' },
+            { id: 'output', path: '../music_samples/1_predicted.wav' }
+        ];
+
+        for (const example of examples) {
+            try {
+                const response = await fetch(example.path);
+                const arrayBuffer = await response.arrayBuffer();
+                const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+                this.examples[example.id].buffer = audioBuffer;
+                
+                // Draw waveform
+                this.drawWaveform(example.id, audioBuffer);
+                
+                // Update duration
+                const duration = this.formatTime(audioBuffer.duration);
+                document.getElementById(`${example.id}-duration`).textContent = duration;
+                document.getElementById(`${example.id}-total-time`).textContent = duration;
+            } catch (error) {
+                console.error(`Failed to load ${example.id}:`, error);
+            }
+        }
+    }
+
+    drawWaveform(exampleId, audioBuffer) {
+        const canvas = document.getElementById(`${exampleId}-waveform`);
+        if (!canvas) return;
+
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width;
+        const height = canvas.height;
+        
+        ctx.clearRect(0, 0, width, height);
+        
+        const channelData = audioBuffer.getChannelData(0);
+        const step = Math.ceil(channelData.length / width);
+        const amp = height / 2;
+        
+        ctx.fillStyle = 'rgba(102, 126, 234, 0.3)';
+        ctx.strokeStyle = '#667eea';
+        ctx.lineWidth = 1;
+        
+        ctx.beginPath();
+        for (let i = 0; i < width; i++) {
+            let min = 1.0;
+            let max = -1.0;
+            for (let j = 0; j < step; j++) {
+                const datum = channelData[i * step + j];
+                if (datum < min) min = datum;
+                if (datum > max) max = datum;
+            }
+            const yMin = (1 + min) * amp;
+            const yMax = (1 + max) * amp;
+            
+            ctx.fillRect(i, yMin, 1, yMax - yMin);
+        }
+        ctx.stroke();
+    }
+
+    setupControlListeners() {
+        ['input', 'target', 'output'].forEach(id => {
+            const playBtn = document.getElementById(`${id}-play-btn`);
+            const volumeSlider = document.getElementById(`${id}-volume`);
+            
+            if (playBtn) {
+                playBtn.addEventListener('click', () => this.togglePlayback(id));
+            }
+            
+            if (volumeSlider) {
+                volumeSlider.addEventListener('input', (e) => {
+                    this.setVolume(id, e.target.value / 100);
+                });
+            }
+        });
+    }
+
+    async togglePlayback(exampleId) {
+        const example = this.examples[exampleId];
+        
+        if (example.isPlaying) {
+            this.stopPlayback(exampleId);
+        } else {
+            // Stop other playing examples
+            Object.keys(this.examples).forEach(id => {
+                if (id !== exampleId && this.examples[id].isPlaying) {
+                    this.stopPlayback(id);
+                }
+            });
+            
+            await this.startPlayback(exampleId);
+        }
+    }
+
+    async startPlayback(exampleId) {
+        const example = this.examples[exampleId];
+        if (!example.buffer) return;
+
+        // Resume audio context if suspended
+        if (this.audioContext.state === 'suspended') {
+            await this.audioContext.resume();
+        }
+
+        // Create source and gain node
+        example.source = this.audioContext.createBufferSource();
+        example.source.buffer = example.buffer;
+        
+        example.gainNode = this.audioContext.createGain();
+        const volumeSlider = document.getElementById(`${exampleId}-volume`);
+        example.gainNode.gain.value = volumeSlider ? volumeSlider.value / 100 : 0.7;
+        
+        example.source.connect(example.gainNode);
+        example.gainNode.connect(this.audioContext.destination);
+        
+        example.source.onended = () => {
+            if (example.isPlaying) {
+                this.stopPlayback(exampleId);
+            }
+        };
+        
+        example.source.start(0);
+        example.isPlaying = true;
+        example.startTime = this.audioContext.currentTime;
+        
+        // Update button to show pause icon
+        this.updatePlayButton(exampleId, true);
+        
+        // Start time update animation
+        this.updateTimeDisplay(exampleId);
+    }
+
+    stopPlayback(exampleId) {
+        const example = this.examples[exampleId];
+        
+        if (example.source) {
+            try {
+                example.source.stop();
+            } catch (e) {
+                // Ignore if already stopped
+            }
+            example.source = null;
+        }
+        
+        if (example.gainNode) {
+            example.gainNode.disconnect();
+            example.gainNode = null;
+        }
+        
+        example.isPlaying = false;
+        
+        // Update button to show play icon
+        this.updatePlayButton(exampleId, false);
+        
+        // Cancel animation frame
+        if (this.animationFrames[exampleId]) {
+            cancelAnimationFrame(this.animationFrames[exampleId]);
+        }
+        
+        // Reset time display
+        document.getElementById(`${exampleId}-current-time`).textContent = '0:00';
+    }
+
+    updatePlayButton(exampleId, isPlaying) {
+        const button = document.getElementById(`${exampleId}-play-btn`);
+        if (!button) return;
+        
+        const svg = button.querySelector('svg');
+        if (isPlaying) {
+            // Pause icon
+            svg.innerHTML = '<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>';
+        } else {
+            // Play icon
+            svg.innerHTML = '<polygon points="5 3 19 12 5 21 5 3"></polygon>';
+        }
+    }
+
+    updateTimeDisplay(exampleId) {
+        const example = this.examples[exampleId];
+        if (!example.isPlaying || !example.buffer) return;
+        
+        const elapsed = this.audioContext.currentTime - example.startTime;
+        const currentTimeEl = document.getElementById(`${exampleId}-current-time`);
+        
+        if (currentTimeEl) {
+            currentTimeEl.textContent = this.formatTime(Math.min(elapsed, example.buffer.duration));
+        }
+        
+        if (elapsed < example.buffer.duration) {
+            this.animationFrames[exampleId] = requestAnimationFrame(() => this.updateTimeDisplay(exampleId));
+        }
+    }
+
+    setVolume(exampleId, value) {
+        const example = this.examples[exampleId];
+        if (example.gainNode) {
+            example.gainNode.gain.value = value;
+        }
+    }
+
+    formatTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    stopAllPlayback() {
+        Object.keys(this.examples).forEach(id => {
+            if (this.examples[id].isPlaying) {
+                this.stopPlayback(id);
+            }
+        });
+    }
+}
+
+// Initialize Examples Modal
+function initializeExamplesModal() {
+    const modal = document.getElementById('examples-modal');
+    const btn = document.getElementById('examples-btn');
+    const closeBtn = document.querySelector('.modal-close-examples');
+    const closeFooterBtn = document.querySelector('#examples-modal .modal-btn');
+    let examplesPlayer = null;
+
+    if (!modal || !btn) return;
+
+    // Open modal
+    btn.addEventListener('click', async function(e) {
+        e.preventDefault();
+        modal.style.display = 'flex';
+        
+        // Initialize player if not already done
+        if (!examplesPlayer) {
+            examplesPlayer = new ExamplesPlayer();
+            await examplesPlayer.initialize();
+        }
+    });
+
+    // Close modal - X button
+    if (closeBtn) {
+        closeBtn.addEventListener('click', function() {
+            modal.style.display = 'none';
+            if (examplesPlayer) {
+                examplesPlayer.stopAllPlayback();
+            }
+        });
+    }
+
+    // Close modal - footer button
+    if (closeFooterBtn) {
+        closeFooterBtn.addEventListener('click', function() {
+            modal.style.display = 'none';
+            if (examplesPlayer) {
+                examplesPlayer.stopAllPlayback();
+            }
+        });
+    }
+
+    // Close when clicking outside modal content
+    window.addEventListener('click', function(event) {
+        if (event.target === modal) {
+            modal.style.display = 'none';
+            if (examplesPlayer) {
+                examplesPlayer.stopAllPlayback();
+            }
+        }
+    });
+
+    // Close on Escape key
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape' && modal.style.display === 'flex') {
+            modal.style.display = 'none';
+            if (examplesPlayer) {
+                examplesPlayer.stopAllPlayback();
+            }
+        }
+    });
+}
+
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     window.musicLab = new MusicLab();
     window.musicChatbot = new MusicChatbot();
     initializeAboutModal();
+    initializeExamplesModal();
 });
