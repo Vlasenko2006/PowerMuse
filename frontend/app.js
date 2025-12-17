@@ -305,6 +305,11 @@ class MusicLab {
                 const elapsed = (Date.now() - startTimestamp) / 1000;
                 document.getElementById(`current-time-${trackNum}`).textContent = 
                     this.formatTime(startTime + Math.min(elapsed, duration));
+                
+                // Update waveform progress
+                const progress = Math.min(elapsed / duration, 1);
+                this.updateWaveformProgress(trackNum, progress);
+                
                 requestAnimationFrame(updateTime);
             }
         };
@@ -335,6 +340,11 @@ class MusicLab {
         track.isPlaying = false;
         this.updatePlayButton(trackNum, false);
         document.getElementById(`current-time-${trackNum}`).textContent = '0:00';
+        
+        // Reset waveform to show no progress
+        if (track.audio) {
+            this.drawWaveform(trackNum, track.audio);
+        }
     }
     
     updatePlayButton(trackNum, isPlaying) {
@@ -1186,6 +1196,69 @@ class ExamplesPlayer {
         ctx.stroke();
     }
 
+    updateWaveformProgress(exampleId, progress) {
+        const canvas = document.getElementById(`${exampleId}-waveform`);
+        if (!canvas) return;
+
+        const example = this.examples[exampleId];
+        if (!example.buffer) return;
+
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width;
+        const height = canvas.height;
+        
+        ctx.clearRect(0, 0, width, height);
+        
+        const channelData = example.buffer.getChannelData(0);
+        const step = Math.ceil(channelData.length / width);
+        const amp = height / 2;
+        
+        // Draw base waveform
+        ctx.fillStyle = 'rgba(102, 126, 234, 0.3)';
+        
+        for (let i = 0; i < width; i++) {
+            let min = 1.0;
+            let max = -1.0;
+            for (let j = 0; j < step; j++) {
+                const datum = channelData[i * step + j];
+                if (datum < min) min = datum;
+                if (datum > max) max = datum;
+            }
+            const yMin = (1 + min) * amp;
+            const yMax = (1 + max) * amp;
+            
+            ctx.fillRect(i, yMin, 1, yMax - yMin);
+        }
+        
+        // Draw progress overlay
+        const progressX = Math.floor(width * progress);
+        if (progressX > 0) {
+            ctx.fillStyle = 'rgba(0, 212, 170, 0.4)';
+            
+            for (let i = 0; i < progressX; i++) {
+                let min = 1.0;
+                let max = -1.0;
+                for (let j = 0; j < step; j++) {
+                    const datum = channelData[i * step + j];
+                    if (datum < min) min = datum;
+                    if (datum > max) max = datum;
+                }
+                const yMin = (1 + min) * amp;
+                const yMax = (1 + max) * amp;
+                
+                ctx.fillRect(i, yMin, 1, yMax - yMin);
+            }
+            
+            // Draw progress line
+            ctx.strokeStyle = '#00d4aa';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(progressX, 0);
+            ctx.lineTo(progressX, height);
+            ctx.stroke();
+        }
+    }
+
     setupControlListeners() {
         ['input', 'target', 'output'].forEach(id => {
             const playBtn = document.getElementById(`${id}-play-btn`);
@@ -1286,6 +1359,11 @@ class ExamplesPlayer {
         
         // Reset time display
         document.getElementById(`${exampleId}-current-time`).textContent = '0:00';
+        
+        // Reset waveform to show no progress
+        if (example.buffer) {
+            this.drawWaveform(exampleId, example.buffer);
+        }
     }
 
     updatePlayButton(exampleId, isPlaying) {
@@ -1312,6 +1390,10 @@ class ExamplesPlayer {
         if (currentTimeEl) {
             currentTimeEl.textContent = this.formatTime(Math.min(elapsed, example.buffer.duration));
         }
+        
+        // Update waveform progress
+        const progress = Math.min(elapsed / example.buffer.duration, 1);
+        this.updateWaveformProgress(exampleId, progress);
         
         if (elapsed < example.buffer.duration) {
             this.animationFrames[exampleId] = requestAnimationFrame(() => this.updateTimeDisplay(exampleId));
