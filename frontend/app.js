@@ -222,7 +222,7 @@ class MusicLab {
         }
 
         const track = this.tracks[trackNum];
-        if (!track.audio) {
+        if (!track.buffer) {
             console.log(`[DEBUG] updateWaveformProgress: no audio buffer for track ${trackNum}`);
             return;
         }
@@ -239,7 +239,7 @@ class MusicLab {
         const height = canvas.offsetHeight;
         
         // Get audio data
-        const data = track.audio.getChannelData(0);
+        const data = track.buffer.getChannelData(0);
         const step = Math.ceil(data.length / width);
         const amp = height / 2;
         
@@ -474,8 +474,8 @@ class MusicLab {
         }
         
         // Reset waveform to show no progress
-        if (track.audio) {
-            this.drawWaveform(trackNum, track.audio);
+        if (track.buffer) {
+            this.drawWaveform(trackNum, track.buffer);
         }
     }
     
