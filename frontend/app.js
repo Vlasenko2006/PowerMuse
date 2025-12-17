@@ -216,12 +216,19 @@ class MusicLab {
 
     updateWaveformProgress(trackNum, progress) {
         const canvas = document.getElementById(`waveform-${trackNum}`);
-        if (!canvas) return;
+        if (!canvas) {
+            console.log(`[DEBUG] updateWaveformProgress: canvas not found for track ${trackNum}`);
+            return;
+        }
 
         const track = this.tracks[trackNum];
-        if (!track.audio) return;
+        if (!track.audio) {
+            console.log(`[DEBUG] updateWaveformProgress: no audio buffer for track ${trackNum}`);
+            return;
+        }
 
         const ctx = canvas.getContext('2d');
+        console.log(`[DEBUG] updateWaveformProgress called for track ${trackNum}, progress=${(progress * 100).toFixed(1)}%`);
         
         // Set canvas size (same as drawWaveform)
         canvas.width = canvas.offsetWidth * window.devicePixelRatio;
@@ -417,8 +424,13 @@ class MusicLab {
             const progress = Math.min(elapsed / track.playDuration, 1);
             if (Math.random() < 0.1) { // Log 10% of the time to avoid spam
                 console.log(`[DEBUG] Track ${trackNum} updateTime: elapsed=${elapsed.toFixed(2)}s, playDuration=${track.playDuration.toFixed(2)}s, progress=${(progress * 100).toFixed(1)}%`);
+                console.log(`[DEBUG] About to call updateWaveformProgress(${trackNum}, ${progress})`);
             }
-            this.updateWaveformProgress(trackNum, progress);
+            try {
+                this.updateWaveformProgress(trackNum, progress);
+            } catch (e) {
+                console.error(`[ERROR] updateWaveformProgress failed:`, e);
+            }
             
             track.animationFrame = requestAnimationFrame(updateTime);
         };
