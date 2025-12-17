@@ -166,6 +166,8 @@ $RUN_CMD python train_simple_ddp.py \
     --gan_weight 0.1 \
     --disc_lr 5e-5 \
     --disc_update_freq 1 \
+    --pure_gan_mode 0.01 \
+    --gan_curriculum_start_epoch 21 \
     --resume ${CHECKPOINT_PATH} \
     2>&1 | stdbuf -oL -eL tee logs/train_creative_agent_resume_epoch20.log
 

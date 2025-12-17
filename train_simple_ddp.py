@@ -129,6 +129,8 @@ def main():
                        help='Curriculum learning rate: transition from music to noise. 0.0=disabled, 0.01=full noise after 100 epochs')
     parser.add_argument('--gan_curriculum_start_epoch', type=int, default=0,
                        help='Epoch to start GAN curriculum (allows pre-training on music before transitioning to noise)')
+    parser.add_argument('--gan_noise_ceiling', type=float, default=1.0,
+                       help='Maximum noise fraction (alpha ceiling). Use to freeze noise level, e.g., 0.3 = freeze at 30%% noise')
     
     args = parser.parse_args()
     

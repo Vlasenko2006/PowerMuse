@@ -1,62 +1,139 @@
 # Session Checkpoint: Training Status & GitHub Repository
 
 **Date**: December 16, 2025  
-**Status**: ✅ Repository Published to GitHub | ⚠️ Training Stuck at 74% Complementarity (Epoch 51/200)  
-**Next Action**: Restart training with stronger complementarity pressure (mask_reg_weight 0.1 → 0.5)
+**Status**: ✅ Pure GAN Mode Implemented | 🎲 Training Running (Epoch 87→108+) | 🔧 Noise Freeze Feature Added  
+**Next Action**: Continue Pure GAN training, test noise freezing at specific levels
 
 ---
 
-## 🎉 Latest Update (Dec 16, 2025)
+## 🎉 Latest Updates (Dec 16, 2025)
 
-### GitHub Repository Published ✅
+### 1. Pure GAN Mode Successfully Deployed ✅
+
+**Feature**: Curriculum learning from music-to-music → noise-to-music generation  
+**Status**: Training stable on levante (epochs 87-108+)  
+**Checkpoint**: `checkpoints_GAN/checkpoint_epoch_100.pt`
+
+**Implementation Details**:
+- **Noise Injection**: Per-sample std scaling with linear interpolation
+  - Formula: `noisy = (1-α) × clean + α × (noise × std)`
+  - Alpha: `α = min(ceiling, pure_gan_mode × counter)`
+  - Per-sample std: `std = encoded.std(dim=(1,2), keepdim=True)` [B, 1, 1]
+  
+**Training Parameters**:
+```bash
+--pure_gan_mode 0.01              # 1% noise increase per epoch
+--gan_curriculum_start_epoch 86   # Started at epoch 86
+--gan_noise_ceiling 1.0           # No ceiling (allows full 100% noise)
+```
+
+**Progress Timeline**:
+- **Epoch 86**: Curriculum starts, α=0.01 (1% noise)
+- **Epoch 87**: α=0.02 (2% noise)
+- **Epoch 100**: α=0.15 (15% noise)
+- **Epoch 106**: α=0.21 (21% noise)
+- **Epoch 108**: α=0.23 (23% noise) ← Current
+- **Expected Epoch 186**: α=1.0 (100% pure noise)
+
+**Training Metrics (Epoch 108)**:
+- **Validation Loss**: Stable (adapting to noisy inputs)
+- **Complementarity**: 75.1% → 85.5% (improving!) ✅
+- **GAN Discriminator**: 92-98% accuracy (healthy adversarial training)
+- **Gradient Norms**: Stable 3-8 range ✅
+- **Output RMS**: Consistent with input/target mix
+
+**Files**:
+- Training code: `train_simple_worker.py` (lines 159-195: noise injection)
+- Arguments: `train_simple_ddp.py` (lines 128-133: Pure GAN args)
+- Launch script: `run_train_pure_gan.sh`
+- Documentation: `PURE_GAN_MODE.md` (300+ lines)
+- Tests: `test_pure_gan_dry_run.py` (all passed ✅)
+
+### 2. Noise Freeze Feature Added 🔒
+
+**New Parameter**: `--gan_noise_ceiling FLOAT`
+- **Purpose**: Cap maximum noise level during training
+- **Default**: 1.0 (no ceiling, original behavior)
+- **Use Case**: Train at fixed noise level for stability/ablation studies
+
+**Example Usage**:
+```bash
+# Freeze noise at 30% after reaching it
+python3 train_simple_ddp.py \
+    --pure_gan_mode 0.01 \
+    --gan_curriculum_start_epoch 86 \
+    --gan_noise_ceiling 0.3 \          # NEW: Freeze at 30%
+    --epochs 150
+```
+
+**Timeline with Ceiling 0.3**:
+- Epochs 86-115: Noise increases 0% → 30% (30 epochs × 0.01)
+- Epochs 116-150: **Frozen at 30%** (35 epochs at constant noise)
+
+**Implementation**:
+- Modified alpha calculation: `alpha = min(gan_noise_ceiling, pure_gan_mode * counter)`
+- Updated print statement: Shows "🔒 Noise ceiling reached" when capped
+- Passes through full training pipeline
+
+**Files**:
+- Code: `train_simple_worker.py` (line 167: ceiling check)
+- Arguments: `train_simple_ddp.py` (line 133: --gan_noise_ceiling)
+- Documentation: `PURE_GAN_FREEZE_NOISE.md` (detailed examples)
+
+### 3. Validation Script Restructured 📁
+
+**Script**: `inference_noisy_gan.py` (completely rewritten)
+
+**New Structure** (matches user requirements):
+```
+inference_gan_outputs/
+  variant_1/  ← Clean input sample #1 with noise
+    1_noisy_input.wav
+    1_noisy_target.wav
+    1_predicted.wav
+    1_waveforms.png
+    1_spectrograms.png
+    2_noisy_input.wav    ← Second prediction (different target)
+    2_noisy_target.wav
+    2_predicted.wav
+    ...
+  variant_2/  ← Clean input sample #2 with noise
+    1_noisy_input.wav
+    ...
+```
+
+**Key Changes**:
+- Each **variant** = different clean input sample (not noise realization)
+- Within variant: multiple predictions with `--num_predictions`
+- `--same_target`: Use same target for all predictions in a variant
+- `--shuffle`: Random targets instead of matched continuations
+
+**New Arguments**:
+```bash
+--num_variants N          # Number of different clean inputs
+--num_predictions M       # Predictions per variant
+--same_target            # Same target for all predictions in variant
+--shuffle                # Random targets
+--noise_fraction 0.0-1.0 # Amount of noise to add
+```
+
+**Example**:
+```bash
+# Test 3 clean inputs, 5 predictions each with same target
+python3 inference_noisy_gan.py \
+    --checkpoint checkpoints_GAN/checkpoint_epoch_100.pt \
+    --num_variants 3 \
+    --num_predictions 5 \
+    --same_target \
+    --noise_fraction 0.23
+```
+
+### Previous: GitHub Repository Published ✅
 
 **Repository**: https://github.com/Vlasenko2006/PowerMuse  
 **Status**: Successfully pushed to GitHub  
 **Files**: 63 files (30 Python, 22 documentation, 10 shell scripts, 1 config)  
 **Size**: ~20,000 lines of code, 221 KB compressed
-
-**Commits**:
-1. Initial commit: 2-stage cascade transformer with creative agent (88 files)
-2. Clean repository: Removed 27 deprecated files, updated documentation
-
-**Key Files**:
-- `README.md` - Comprehensive project overview
-- `FILES_MANIFEST.md` - Complete file inventory
-- `SESSION_CHECKPOINT.md` - This file (training history)
-- Core model: `model_simple_transformer.py`, `creative_agent.py`, `audio_discriminator.py`
-- Training: `train_simple_worker.py`, `train_simple_ddp.py`
-- Launch scripts: `run_train_creative_agent_fixed.sh`, `run_train_creative_agent_resume.sh`
-
-### Training Status: Complementarity Stuck at 74% ⚠️
-
-**Problem**: After epoch 20 resume, complementarity dropped and plateaued at 74% (was 87% at epoch 19)
-
-**Diagnosis**:
-- Epoch 1-20: Complementarity increased 75% → 87% (healthy)
-- Epoch 21-51: **Stuck at 73-74%** with mask overlap 0.26-0.27
-- Mask regularization loss: Hovering at 0.76-0.78 (should decrease to 0.10-0.20)
-- Model learned local optimum: overlapping masks work "well enough" for reconstruction
-
-**Root Cause**: `mask_reg_weight=0.1` too weak
-- Complementarity loss ≈ 0.27 (overlap)
-- Effective weight: 0.27 × 0.1 = **0.027** contribution
-- RMS losses: 0.13-0.14 × 0.3 = **0.04** contribution (dominates)
-- Model prioritizes reconstruction over mask separation
-
-**Solution Created**: `run_train_creative_agent_push_complementarity.sh`
-- Increase `mask_reg_weight` from 0.1 → **0.5** (5× stronger)
-- Effective complementarity weight: 0.27 × 0.5 = **0.135** (3.5× larger than RMS)
-- Expected: Force model to separate masks, push complementarity 74% → 90%+
-
-### Current Training Metrics (Epoch 51/200)
-
-- **Validation Loss**: 0.527 (improved from 0.49 at epoch 20)
-- **Complementarity**: 74.0% (target: 90%+) ⚠️
-- **Mask Overlap**: 0.260 (should decrease to 0.10)
-- **Mask Balance**: 50.7% input / 51.2% target ✅
-- **Gradient Norms**: 3-8 range (stable) ✅
-- **Discriminator Accuracy**: 84% real/fake (balanced) ✅
-- **Output RMS Ratio**: 0.81 (Output/Input, healthy)
 
 ---
 
@@ -78,25 +155,54 @@
 
 ## 🎯 Next Steps
 
-1. **Sync New Script to Remote**:
-   ```bash
-   bash sync_to_remote.sh  # Uploads run_train_creative_agent_push_complementarity.sh
-   ```
+### 1. Monitor Pure GAN Training
+**Current Status**: Running on levante (epoch 108+, ~23% noise)
+```bash
+ssh g260141@levante.dkrz.de
+cd /work/gg0302/g260141/Jingle_D
+tail -f training/log_pure_gan_*.txt  # Monitor progress
+```
 
-2. **Restart Training on Levante**:
-   ```bash
-   ssh g260141@levante.dkrz.de
-   cd /work/gg0302/g260141/Jingle_D
-   pkill -f train_simple  # Kill current stuck training
-   chmod +x run_train_creative_agent_push_complementarity.sh
-   bash run_train_creative_agent_push_complementarity.sh  # Resume from epoch 51
-   ```
+**Expected Milestones**:
+- Epoch 130: 45% noise (α=0.45)
+- Epoch 150: 65% noise (α=0.65)
+- Epoch 186: 100% noise (α=1.0, pure noise mode)
+- Continue training to epoch 200-250 at 100% noise
 
-3. **Expected Improvements**:
-   - Complementarity: 74% → 90%+ by epoch 100
-   - Mask overlap: 0.26 → 0.10
-   - Mask reg loss: 0.76 → 0.10-0.20
-   - More distinct separation: input extracts rhythm, target extracts harmony/melody
+### 2. Test Noise Freezing (Optional)
+**Experiment**: Train at fixed noise levels for stability analysis
+```bash
+# Option A: Resume from epoch 108, freeze at 30% noise
+python3 train_simple_ddp.py \
+    --resume checkpoints_GAN/checkpoint_epoch_108.pt \
+    --gan_noise_ceiling 0.3 \
+    --epochs 150
+
+# Option B: Start new run, freeze at 50%
+python3 train_simple_ddp.py \
+    --pure_gan_mode 0.01 \
+    --gan_curriculum_start_epoch 0 \
+    --gan_noise_ceiling 0.5 \
+    --checkpoint_dir checkpoints_GAN_50 \
+    --epochs 100
+```
+
+### 3. Validate Noisy Generation
+**Test trained model with noisy inputs**:
+```bash
+# On levante after epoch 150+
+python3 inference_noisy_gan.py \
+    --checkpoint checkpoints_GAN/checkpoint_epoch_150.pt \
+    --num_variants 5 \
+    --num_predictions 3 \
+    --noise_fraction 0.65 \
+    --shuffle
+```
+
+**Analysis Goals**:
+- How well does model handle noisy inputs at various noise levels?
+- Does same noise seed affect different inputs consistently?
+- Quality comparison: 0% → 30% → 65% → 100% noise
 
 4. **Monitor**:
    - First 5 epochs: Watch complementarity increase

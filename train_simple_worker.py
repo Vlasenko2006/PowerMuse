@@ -83,7 +83,7 @@ def train_epoch(model, encodec_model, dataloader, optimizer, device, rank, epoch
                 mask_channel_keep=0.5, mask_energy_threshold=0.7, mask_reg_weight=0.1,
                 balance_loss_weight=5.0,
                 discriminator=None, disc_optimizer=None, gan_weight=0.0, disc_update_freq=1,
-                corr_weight=0.0):
+                corr_weight=0.0, pure_gan_mode=0.0, gan_curriculum_counter=0, gan_noise_ceiling=1.0):
     """Train for one epoch with optional GAN training."""
     model.train()
     if discriminator is not None:
@@ -162,10 +162,11 @@ def train_epoch(model, encodec_model, dataloader, optimizer, device, rank, epoch
         
         # Pure GAN mode: Curriculum learning from music-to-music → noise-to-music
         if pure_gan_mode > 0:
-            # Compute interpolation coefficient: α = min(1.0, pure_gan_mode × counter)
+            # Compute interpolation coefficient: α = min(ceiling, pure_gan_mode × counter)
             # pure_gan_mode: rate of transition (e.g., 0.01 = full noise after 100 epochs)
             # counter: cumulative epochs since start of curriculum
-            alpha = min(1.0, pure_gan_mode * gan_curriculum_counter)
+            # gan_noise_ceiling: maximum alpha value (e.g., 0.3 = freeze at 30% noise)
+            alpha = min(gan_noise_ceiling, pure_gan_mode * gan_curriculum_counter)
             
             if alpha > 0:
                 with torch.no_grad():
@@ -187,8 +188,11 @@ def train_epoch(model, encodec_model, dataloader, optimizer, device, rank, epoch
                         print(f"  Alpha: {alpha:.4f} (0=music, 1=noise)")
                         print(f"  Input:  {(1-alpha)*100:.1f}% music + {alpha*100:.1f}% noise")
                         print(f"  Target: {(1-alpha)*100:.1f}% music + {alpha*100:.1f}% noise")
-                        if alpha >= 1.0:
-                            print(f"  ✓ Full noise mode achieved!")
+                        if alpha >= gan_noise_ceiling:
+                            if gan_noise_ceiling < 1.0:
+                                print(f"  🔒 Noise ceiling reached ({gan_noise_ceiling*100:.0f}% max noise)")
+                            else:
+                                print(f"  ✓ Full noise mode achieved!")
                         print()
         
         # Get input audio for combined loss (using ORIGINAL clean inputs)
@@ -590,10 +594,9 @@ def validate_epoch(model, encodec_model, dataloader, device, rank, epoch,
                 first_target_audio = targets[0, 0].cpu()  # [samples]
                 first_output_audio = output_audio[0, 0].cpu()  # [samples]
             
-            # Combined loss with all components (using ORIGINAL clean inputs/targets)
-            # Important: Loss always compares to real audio, not noise
+            # Combined loss with all components (validation always uses clean targets)
             loss, rms_input, rms_target, spectral, mel_value, corr_penalty = combined_loss(
-                output_audio, input_audio, original_targets,  # Use original_targets, not noisy
+                output_audio, input_audio, targets,
                 loss_weight_input, loss_weight_target,
                 loss_weight_spectral, loss_weight_mel,
                 weight_correlation=corr_weight
@@ -977,7 +980,8 @@ def train_worker(rank, world_size, args):
             disc_update_freq=args.disc_update_freq,
             corr_weight=args.corr_weight,
             pure_gan_mode=args.pure_gan_mode,
-            gan_curriculum_counter=gan_curriculum_counter
+            gan_curriculum_counter=gan_curriculum_counter,
+            gan_noise_ceiling=args.gan_noise_ceiling
         )
         
         # Validate
