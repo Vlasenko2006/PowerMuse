@@ -191,8 +191,10 @@ class MusicLab {
         // Draw time markers
         this.drawTimeMarkers(trackNum, audioBuffer.duration);
         
-        // Initialize selection overlay
-        this.updateSelectionOverlay(trackNum, 0, 16);
+        // Restore current selection overlay (don't reset to 0-16)
+        const startTime = parseFloat(document.getElementById(`start-time-${trackNum}`).value) || 0;
+        const endTime = parseFloat(document.getElementById(`end-time-${trackNum}`).value) || 16;
+        this.updateSelectionOverlay(trackNum, startTime, endTime);
     }
     
     drawTimeMarkers(trackNum, duration) {
@@ -217,25 +219,20 @@ class MusicLab {
         const startPercent = (startTime / duration) * 100;
         const widthPercent = ((endTime - startTime) / duration) * 100;
         
+        console.log(`[OVERLAY] Track ${trackNum} - Setting overlay: left=${startPercent.toFixed(2)}%, width=${widthPercent.toFixed(2)}% (start=${startTime.toFixed(2)}s, end=${endTime.toFixed(2)}s, duration=${duration.toFixed(2)}s)`);
+        
         overlay.style.left = `${startPercent}%`;
         overlay.style.width = `${widthPercent}%`;
     }
 
     updateWaveformProgress(trackNum, progress) {
         const canvas = document.getElementById(`waveform-${trackNum}`);
-        if (!canvas) {
-            console.log(`[DEBUG] updateWaveformProgress: canvas not found for track ${trackNum}`);
-            return;
-        }
+        if (!canvas) return;
 
         const track = this.tracks[trackNum];
-        if (!track.buffer) {
-            console.log(`[DEBUG] updateWaveformProgress: no audio buffer for track ${trackNum}`);
-            return;
-        }
+        if (!track.buffer) return;
 
         const ctx = canvas.getContext('2d');
-        console.log(`[DEBUG] updateWaveformProgress called for track ${trackNum}, progress=${(progress * 100).toFixed(1)}%`);
         
         // Set canvas size (same as drawWaveform)
         canvas.width = canvas.offsetWidth * window.devicePixelRatio;
@@ -292,7 +289,7 @@ class MusicLab {
         ctx.stroke();
         
         // Draw progress overlay (from window start to current position)
-        console.log(`[DEBUG] Track ${trackNum} Progress: ${(progress * 100).toFixed(1)}%, progressInWindow=${progressInWindow}, windowStartX=${windowStartX}, progressAbsoluteX=${progressAbsoluteX}, width=${width}, height=${height}`);
+        console.log(`[PROGRESS] Track ${trackNum} - progress=${(progress * 100).toFixed(1)}%, startTime=${startTime.toFixed(2)}s, playDuration=${playDuration.toFixed(2)}s, windowStartX=${windowStartX}, progressAbsoluteX=${progressAbsoluteX}`);
         
         if (progressInWindow > 0) {
             ctx.beginPath();
@@ -315,21 +312,18 @@ class MusicLab {
             ctx.globalAlpha = 1.0;
             
             // Draw progress line
-            console.log(`[DEBUG] Drawing progress line at X=${progressAbsoluteX}, height=${height}`);
             ctx.strokeStyle = '#00d4aa';
             ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.moveTo(progressAbsoluteX, 0);
             ctx.lineTo(progressAbsoluteX, height);
             ctx.stroke();
-            console.log(`[DEBUG] Progress line drawn`);
-        } else {
-            console.log(`[DEBUG] No progress to show (progressInWindow=${progressInWindow})`);
         }
         
         // Redraw selection overlay
         const selectionStart = parseFloat(document.getElementById(`start-time-${trackNum}`).value);
         const selectionEnd = parseFloat(document.getElementById(`end-time-${trackNum}`).value);
+        console.log(`[REDRAW] Track ${trackNum} - Redrawing overlay after progress update: selectionStart=${selectionStart.toFixed(2)}s, selectionEnd=${selectionEnd.toFixed(2)}s`);
         this.updateSelectionOverlay(trackNum, selectionStart, selectionEnd);
     }
     
@@ -379,7 +373,6 @@ class MusicLab {
     async playTrack(trackNum, startTime = 0, endTime = null) {
         // Resume AudioContext if suspended
         if (this.audioContext.state === 'suspended') {
-            console.log(`[DEBUG] AudioContext suspended, resuming for track ${trackNum}...`);
             await this.audioContext.resume();
         }
         
@@ -390,12 +383,12 @@ class MusicLab {
             try {
                 track.source.stop();
                 track.source.disconnect();
-            } catch (e) {
-                console.log(`[DEBUG] Could not stop track ${trackNum} source:`, e.message);
-            }
+            } catch (e) {}
         }
         
-        console.log(`[DEBUG] Playing track ${trackNum}, AudioContext state:`, this.audioContext.state);
+        // Calculate duration
+        const duration = endTime ? endTime - startTime : track.duration - startTime;
+        console.log(`[PLAY] Track ${trackNum} - startTime=${startTime.toFixed(2)}s, endTime=${endTime ? endTime.toFixed(2) : 'null'}, duration=${duration.toFixed(2)}s`);
         
         // Create source
         track.source = this.audioContext.createBufferSource();
@@ -411,7 +404,6 @@ class MusicLab {
         gainNode.connect(this.audioContext.destination);
         
         // Play
-        const duration = endTime ? endTime - startTime : track.duration - startTime;
         track.source.start(0, startTime, duration);
         track.isPlaying = true;
         
@@ -436,15 +428,7 @@ class MusicLab {
             
             // Update waveform progress
             const progress = Math.min(elapsed / track.playDuration, 1);
-            if (Math.random() < 0.1) { // Log 10% of the time to avoid spam
-                console.log(`[DEBUG] Track ${trackNum} updateTime: elapsed=${elapsed.toFixed(2)}s, playDuration=${track.playDuration.toFixed(2)}s, progress=${(progress * 100).toFixed(1)}%`);
-                console.log(`[DEBUG] About to call updateWaveformProgress(${trackNum}, ${progress})`);
-            }
-            try {
-                this.updateWaveformProgress(trackNum, progress);
-            } catch (e) {
-                console.error(`[ERROR] updateWaveformProgress failed:`, e);
-            }
+            this.updateWaveformProgress(trackNum, progress);
             
             track.animationFrame = requestAnimationFrame(updateTime);
         };
@@ -465,12 +449,11 @@ class MusicLab {
             try {
                 track.source.stop();
                 track.source.disconnect();
-                console.log(`[DEBUG] Stopped track ${trackNum}`);
-            } catch (e) {
-                console.log(`[DEBUG] Could not stop track ${trackNum}:`, e.message);
-            }
+            } catch (e) {}
             track.source = null;
         }
+        
+        console.log(`[STOP] Track ${trackNum} - Playback stopped`);
         
         track.isPlaying = false;
         
@@ -515,6 +498,8 @@ class MusicLab {
         const startTime = parseFloat(document.getElementById(`start-time-${trackNum}`).value);
         const endTime = parseFloat(document.getElementById(`end-time-${trackNum}`).value);
         
+        console.log(`[PREVIEW] Track ${trackNum} - Preview Selection clicked: startTime=${startTime.toFixed(2)}s, endTime=${endTime.toFixed(2)}s`);
+        
         this.stopTrack(trackNum);
         this.playTrack(trackNum, startTime, endTime);
     }
@@ -543,6 +528,8 @@ class MusicLab {
         slider.addEventListener('input', (e) => {
             const startTime = parseFloat(e.target.value);
             const endTime = startTime + 16;
+            
+            console.log(`[SLIDER] Track ${trackNum} - slider moved to startTime=${startTime.toFixed(2)}s, endTime=${endTime.toFixed(2)}s`);
             
             startInput.value = startTime.toFixed(1);
             endInput.value = endTime.toFixed(1);
