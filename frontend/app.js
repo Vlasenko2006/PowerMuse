@@ -160,6 +160,13 @@ class MusicLab {
         const step = Math.ceil(data.length / width);
         const amp = height / 2;
         
+        // Find max amplitude for normalization
+        let maxAmp = 0;
+        for (let i = 0; i < data.length; i++) {
+            maxAmp = Math.max(maxAmp, Math.abs(data[i]));
+        }
+        const scale = maxAmp > 0 ? 0.95 / maxAmp : 1; // Scale to 95% of available height
+        
         // Clear canvas
         ctx.clearRect(0, 0, width, height);
         
@@ -169,8 +176,8 @@ class MusicLab {
         ctx.lineWidth = 2;
         
         for (let i = 0; i < width; i++) {
-            const min = Math.min(...data.slice(i * step, (i + 1) * step));
-            const max = Math.max(...data.slice(i * step, (i + 1) * step));
+            const min = Math.min(...data.slice(i * step, (i + 1) * step)) * scale;
+            const max = Math.max(...data.slice(i * step, (i + 1) * step)) * scale;
             
             if (i === 0) {
                 ctx.moveTo(i, (1 + min) * amp);
@@ -243,6 +250,13 @@ class MusicLab {
         const step = Math.ceil(data.length / width);
         const amp = height / 2;
         
+        // Find max amplitude for normalization
+        let maxAmp = 0;
+        for (let i = 0; i < data.length; i++) {
+            maxAmp = Math.max(maxAmp, Math.abs(data[i]));
+        }
+        const scale = maxAmp > 0 ? 0.95 / maxAmp : 1; // Scale to 95% of available height
+        
         // Get time window info
         const startTime = track.startTimeOffset || 0;
         const duration = track.duration;
@@ -265,8 +279,8 @@ class MusicLab {
         ctx.lineWidth = 2;
         
         for (let i = 0; i < width; i++) {
-            const min = Math.min(...data.slice(i * step, (i + 1) * step));
-            const max = Math.max(...data.slice(i * step, (i + 1) * step));
+            const min = Math.min(...data.slice(i * step, (i + 1) * step)) * scale;
+            const max = Math.max(...data.slice(i * step, (i + 1) * step)) * scale;
             
             if (i === 0) {
                 ctx.moveTo(i, (1 + min) * amp);
@@ -287,8 +301,8 @@ class MusicLab {
             ctx.globalAlpha = 0.6;
             
             for (let i = windowStartX; i < progressAbsoluteX; i++) {
-                const min = Math.min(...data.slice(i * step, (i + 1) * step));
-                const max = Math.max(...data.slice(i * step, (i + 1) * step));
+                const min = Math.min(...data.slice(i * step, (i + 1) * step)) * scale;
+                const max = Math.max(...data.slice(i * step, (i + 1) * step)) * scale;
                 
                 if (i === windowStartX) {
                     ctx.moveTo(i, (1 + min) * amp);
