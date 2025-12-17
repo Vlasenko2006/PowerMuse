@@ -271,6 +271,8 @@ class MusicLab {
         ctx.stroke();
         
         // Draw progress overlay (from window start to current position)
+        console.log(`[DEBUG] Track ${trackNum} Progress: ${(progress * 100).toFixed(1)}%, progressInWindow=${progressInWindow}, windowStartX=${windowStartX}, progressAbsoluteX=${progressAbsoluteX}, width=${width}, height=${height}`);
+        
         if (progressInWindow > 0) {
             ctx.beginPath();
             ctx.strokeStyle = '#00d4aa';
@@ -292,12 +294,16 @@ class MusicLab {
             ctx.globalAlpha = 1.0;
             
             // Draw progress line
+            console.log(`[DEBUG] Drawing progress line at X=${progressAbsoluteX}, height=${height}`);
             ctx.strokeStyle = '#00d4aa';
             ctx.lineWidth = 3;
             ctx.beginPath();
             ctx.moveTo(progressAbsoluteX, 0);
             ctx.lineTo(progressAbsoluteX, height);
             ctx.stroke();
+            console.log(`[DEBUG] Progress line drawn`);
+        } else {
+            console.log(`[DEBUG] No progress to show (progressInWindow=${progressInWindow})`);
         }
         
         // Redraw selection overlay
@@ -409,6 +415,9 @@ class MusicLab {
             
             // Update waveform progress
             const progress = Math.min(elapsed / track.playDuration, 1);
+            if (Math.random() < 0.1) { // Log 10% of the time to avoid spam
+                console.log(`[DEBUG] Track ${trackNum} updateTime: elapsed=${elapsed.toFixed(2)}s, playDuration=${track.playDuration.toFixed(2)}s, progress=${(progress * 100).toFixed(1)}%`);
+            }
             this.updateWaveformProgress(trackNum, progress);
             
             track.animationFrame = requestAnimationFrame(updateTime);
