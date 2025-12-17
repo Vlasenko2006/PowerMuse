@@ -247,22 +247,23 @@ def extract_audio_segment(wav_path: str, start_sec: float = 0.0, duration_sec: f
 
 
 def generate_music(job_id: str, track1_path: str, track2_path: str, 
-                   start_time: float, end_time: float):
+                   start_time_1: float, end_time_1: float,
+                   start_time_2: float, end_time_2: float):
     """
     Background task for music generation
     
     Pipeline:
     1. Convert both tracks to WAV 24kHz mono
-    2. Extract 16-second segments
+    2. Extract 16-second segments from specified times
     3. Encode with EnCodec
     4. Run through model
     5. Decode output
     6. Save as WAV
-    7. Cleanup temporary files
+    7. Cleanup temporary files (but keep output)
     """
     try:
         print(f"DEBUG: Starting generation for job {job_id}")
-        print(f"DEBUG: track1={track1_path}, track2={track2_path}, start_time={start_time}, end_time={end_time}")
+        print(f"DEBUG: track1={track1_path} ({start_time_1}s-{end_time_1}s), track2={track2_path} ({start_time_2}s-{end_time_2}s)")
         
         jobs_db[job_id]['status'] = 'running'
         jobs_db[job_id]['progress'] = 10
@@ -287,11 +288,13 @@ def generate_music(job_id: str, track1_path: str, track2_path: str,
         jobs_db[job_id]['progress'] = 30
         jobs_db[job_id]['message'] = 'Extracting audio segments...'
         
-        # Extract 16-second segments
-        print(f"DEBUG: Extracting segment from track1 ({start_time}s - {start_time+16}s)")
-        audio1, sr1 = extract_audio_segment(wav1_path, start_time, 16.0)
+        # Extract 16-second segments from specified start times
+        duration = 16.0
+        print(f"DEBUG: Extracting segment from track1 ({start_time_1}s - {start_time_1+duration}s)")
+        audio1, sr1 = extract_audio_segment(wav1_path, start_time_1, duration)
         print(f"DEBUG: Track1 audio shape: {audio1.shape}, sr: {sr1}")
-        audio2, sr2 = extract_audio_segment(wav2_path, start_time, 16.0)
+        print(f"DEBUG: Extracting segment from track2 ({start_time_2}s - {start_time_2+duration}s)")
+        audio2, sr2 = extract_audio_segment(wav2_path, start_time_2, duration)
         print(f"DEBUG: Track2 audio shape: {audio2.shape}, sr: {sr2}")
         
         # Convert to tensors
@@ -365,11 +368,14 @@ def generate_music(job_id: str, track1_path: str, track2_path: str,
         jobs_db[job_id]['message'] = 'Music generation complete!'
         jobs_db[job_id]['output_path'] = output_path
         
-        # Cleanup temporary files (keep only output)
+        # Cleanup temporary files (keep output for download)
         for temp_file in [track1_path, track2_path, wav1_path, wav2_path]:
             if os.path.exists(temp_file):
-                os.remove(temp_file)
-                logger.info(f"  🗑️  Cleaned up: {temp_file}")
+                try:
+                    os.remove(temp_file)
+                    logger.info(f"  🗑️  Cleaned up: {temp_file}")
+                except Exception as e:
+                    logger.warning(f"  ⚠️  Could not delete {temp_file}: {e}")
         
     except Exception as e:
         logger.error(f"Generation failed for job {job_id}: {e}", exc_info=True)
@@ -413,8 +419,10 @@ async def health_check():
 async def generate_music_endpoint(
     track1: UploadFile = File(...),
     track2: UploadFile = File(...),
-    start_time: float = Form(0.0),
-    end_time: float = Form(16.0),
+    start_time_1: float = Form(0.0),
+    end_time_1: float = Form(16.0),
+    start_time_2: float = Form(0.0),
+    end_time_2: float = Form(16.0),
     background_tasks: BackgroundTasks = None
 ):
     """
@@ -423,17 +431,18 @@ async def generate_music_endpoint(
     Args:
         track1: First audio track (any format: mp3, m4a, wav, etc.)
         track2: Second audio track (any format)
-        start_time: Start time in seconds (default: 0.0)
-        end_time: End time in seconds (default: 16.0)
+        start_time_1: Start time for track 1 in seconds (default: 0.0)
+        end_time_1: End time for track 1 in seconds (default: 16.0)
+        start_time_2: Start time for track 2 in seconds (default: 0.0)
+        end_time_2: End time for track 2 in seconds (default: 16.0)
     
     Returns:
         job_id: Unique job identifier for status polling
     """
     job_id = str(uuid.uuid4())
     logger.info(f"📨 New generation request - Job ID: {job_id}")
-    logger.info(f"   Track 1: {track1.filename}")
-    logger.info(f"   Track 2: {track2.filename}")
-    logger.info(f"   Time range: {start_time}s - {end_time}s")
+    logger.info(f"   Track 1: {track1.filename} ({start_time_1}s - {end_time_1}s)")
+    logger.info(f"   Track 2: {track2.filename} ({start_time_2}s - {end_time_2}s)")
     
     # Initialize job
     jobs_db[job_id] = {
@@ -463,7 +472,8 @@ async def generate_music_endpoint(
     # Start background processing
     background_tasks.add_task(
         generate_music,
-        job_id, track1_path, track2_path, start_time, end_time
+        job_id, track1_path, track2_path, 
+        start_time_1, end_time_1, start_time_2, end_time_2
     )
     
     return {

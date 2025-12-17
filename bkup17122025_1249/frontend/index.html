@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MusicLab - AI Music Generation</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Floating Musical Notes Background -->
+    <div class="floating-notes">
+        <div class="note note-1">♪</div>
+        <div class="note note-2">♫</div>
+        <div class="note note-3">𝄞</div>
+        <div class="note note-4">♪</div>
+        <div class="note note-5">♫</div>
+        <div class="note note-6">𝄞</div>
+        <div class="note note-7">♪</div>
+        <div class="note note-8">♫</div>
+        <div class="note note-9">𝄞</div>
+        <div class="note note-10">♪</div>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <svg class="logo-icon" viewBox="0 -12 30 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Two connected eighth notes with large horizontal beam -->
+                        <g transform="translate(20, 0)">
+                            <!-- First note head (left) -->
+                            <ellipse cx="-5" cy="8" rx="3.5" ry="2.8" fill="white" transform="rotate(-20 -5 8)"/>
+                            <!-- Second note head (right) -->
+                            <ellipse cx="5" cy="8" rx="3.5" ry="2.8" fill="white" transform="rotate(-20 5 8)"/>
+                            <!-- First stem (left, 40% shorter tail) -->
+                            <rect x="-2" y="-10" width="1.5" height="18" fill="white"/>
+                            <!-- Second stem (right, 40% shorter tail) -->
+                            <rect x="7.5" y="-10" width="1.5" height="18" fill="white"/>
+                            <!-- Large horizontal beam at top (20% larger) -->
+                            <rect x="-2" y="-10" width="11" height="4.8" fill="white"/>
+                        </g>
+                        <!-- Cube -->
+                        <path d="M20 14L5 18.9V30.1L20 35L35 30.1V18.9L20 14Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                        <path d="M20 24.5V35" stroke="currentColor" stroke-width="2"/>
+                        <path d="M5 18.9L20 24.5L35 18.9" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                    </svg>
+                    <h1>MusicLab</h1>
+                </div>
+                <nav class="nav">
+                    <a href="#" class="nav-link active">Studio</a>
+                    <a href="#" class="nav-link">Examples</a>
+                    <a href="#" class="nav-link">About</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main">
+        <div class="container">
+            <!-- Hero Section -->
+            <section class="hero">
+                <h2 class="hero-title">AI-Powered Music Generation</h2>
+                <p class="hero-subtitle">Upload two tracks, select 16-second patterns, and let our AI create unique music</p>
+            </section>
+
+            <!-- Studio Section -->
+            <section class="studio">
+                <div class="studio-grid">
+                    <!-- Track 1 -->
+                    <div class="track-card">
+                        <div class="track-header">
+                            <div class="track-number">01</div>
+                            <h3 class="track-title">Input Track A</h3>
+                            <div class="track-status" id="status-track1">
+                                <span class="status-indicator"></span>
+                                <span class="status-text">No file uploaded</span>
+                            </div>
+                        </div>
+
+                        <div class="upload-area" id="upload-area-1">
+                            <input type="file" id="file-input-1" accept="audio/*" hidden>
+                            <label for="file-input-1" class="upload-label">
+                                <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="17 8 12 3 7 8"/>
+                                    <line x1="12" y1="3" x2="12" y2="15"/>
+                                </svg>
+                                <span class="upload-text">Drop audio file here or click to upload</span>
+                                <span class="upload-hint">MP3, WAV, OGG • Min 16 seconds</span>
+                            </label>
+                        </div>
+
+                        <div class="track-player" id="player-1" style="display: none;">
+                            <div class="waveform-container">
+                                <canvas id="waveform-1" class="waveform-canvas"></canvas>
+                                <div class="selection-overlay" id="selection-1"></div>
+                                <div class="time-markers" id="markers-1"></div>
+                            </div>
+
+                            <div class="player-controls">
+                                <button class="btn-icon btn-play" id="play-btn-1">
+                                    <svg class="icon-play" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M8 5v14l11-7z"/>
+                                    </svg>
+                                    <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
+                                        <path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
+                                    </svg>
+                                </button>
+                                <div class="time-display">
+                                    <span id="current-time-1">0:00</span>
+                                    <span class="time-separator">/</span>
+                                    <span id="duration-1">0:00</span>
+                                </div>
+                                <div class="volume-control">
+                                    <svg class="icon-volume" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                                    </svg>
+                                    <input type="range" class="volume-slider" id="volume-1" min="0" max="100" value="80">
+                                </div>
+                            </div>
+
+                            <div class="selection-controls">
+                                <div class="selection-info">
+                                    <label class="selection-label">Selected Pattern:</label>
+                                    <div class="selection-range">
+                                        <input type="number" id="start-time-1" class="time-input" value="0" min="0" step="0.1">
+                                        <span class="range-separator">→</span>
+                                        <input type="number" id="end-time-1" class="time-input" value="16" min="16" step="0.1">
+                                        <span class="time-unit">sec</span>
+                                    </div>
+                                    <div class="selection-duration" id="selection-duration-1">16.0 sec</div>
+                                </div>
+                                <input type="range" id="slider-1" class="pattern-slider" min="0" max="100" value="0" step="0.1">
+                            </div>
+
+                            <div class="track-actions">
+                                <button class="btn btn-secondary" id="preview-btn-1">
+                                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                        <circle cx="11" cy="11" r="8"/>
+                                        <path d="m21 21-4.35-4.35"/>
+                                    </svg>
+                                    Preview Selection
+                                </button>
+                                <button class="btn btn-ghost" id="clear-btn-1">
+                                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                        <path d="M3 6h18"/>
+                                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                                    </svg>
+                                    Clear Track
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Track 2 -->
+                    <div class="track-card">
+                        <div class="track-header">
+                            <div class="track-number">02</div>
+                            <h3 class="track-title">Input Track B</h3>
+                            <div class="track-status" id="status-track2">
+                                <span class="status-indicator"></span>
+                                <span class="status-text">No file uploaded</span>
+                            </div>
+                        </div>
+
+                        <div class="upload-area" id="upload-area-2">
+                            <input type="file" id="file-input-2" accept="audio/*" hidden>
+                            <label for="file-input-2" class="upload-label">
+                                <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="17 8 12 3 7 8"/>
+                                    <line x1="12" y1="3" x2="12" y2="15"/>
+                                </svg>
+                                <span class="upload-text">Drop audio file here or click to upload</span>
+                                <span class="upload-hint">MP3, WAV, OGG • Min 16 seconds</span>
+                            </label>
+                        </div>
+
+                        <div class="track-player" id="player-2" style="display: none;">
+                            <div class="waveform-container">
+                                <canvas id="waveform-2" class="waveform-canvas"></canvas>
+                                <div class="selection-overlay" id="selection-2"></div>
+                                <div class="time-markers" id="markers-2"></div>
+                            </div>
+
+                            <div class="player-controls">
+                                <button class="btn-icon btn-play" id="play-btn-2">
+                                    <svg class="icon-play" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M8 5v14l11-7z"/>
+                                    </svg>
+                                    <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
+                                        <path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
+                                    </svg>
+                                </button>
+                                <div class="time-display">
+                                    <span id="current-time-2">0:00</span>
+                                    <span class="time-separator">/</span>
+                                    <span id="duration-2">0:00</span>
+                                </div>
+                                <div class="volume-control">
+                                    <svg class="icon-volume" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                                    </svg>
+                                    <input type="range" class="volume-slider" id="volume-2" min="0" max="100" value="80">
+                                </div>
+                            </div>
+
+                            <div class="selection-controls">
+                                <div class="selection-info">
+                                    <label class="selection-label">Selected Pattern:</label>
+                                    <div class="selection-range">
+                                        <input type="number" id="start-time-2" class="time-input" value="0" min="0" step="0.1">
+                                        <span class="range-separator">→</span>
+                                        <input type="number" id="end-time-2" class="time-input" value="16" min="16" step="0.1">
+                                        <span class="time-unit">sec</span>
+                                    </div>
+                                    <div class="selection-duration" id="selection-duration-2">16.0 sec</div>
+                                </div>
+                                <input type="range" id="slider-2" class="pattern-slider" min="0" max="100" value="0" step="0.1">
+                            </div>
+
+                            <div class="track-actions">
+                                <button class="btn btn-secondary" id="preview-btn-2">
+                                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                        <circle cx="11" cy="11" r="8"/>
+                                        <path d="m21 21-4.35-4.35"/>
+                                    </svg>
+                                    Preview Selection
+                                </button>
+                                <button class="btn btn-ghost" id="clear-btn-2">
+                                    <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                        <path d="M3 6h18"/>
+                                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                                    </svg>
+                                    Clear Track
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Status Message (shown when waiting for uploads) -->
+                <div class="status-message-section" id="status-message" style="display: block;">
+                    <div class="status-message-card">
+                        <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                        </svg>
+                        <h3 class="status-message-title">Upload Two Tracks to Begin</h3>
+                        <p class="status-message-text">Select 16+ second audio files (MP3, WAV, OGG) for Track A and Track B. The Generate button will appear automatically.</p>
+                    </div>
+                </div>
+
+                <!-- Generate Section -->
+                <div class="generate-section" id="generate-section" style="display: none;">
+                    <div class="generate-card">
+                        <div class="generate-header">
+                            <h3 class="generate-title">Ready to Generate</h3>
+                            <p class="generate-subtitle">Your AI will blend these two patterns into unique music</p>
+                        </div>
+                        <div class="generate-actions">
+                            <button class="btn btn-primary btn-large" id="generate-btn">
+                                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                                </svg>
+                                Generate Music
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Loading Section -->
+                <div class="loading-section" id="loading-section" style="display: none;">
+                    <div class="loading-card">
+                        <div class="loading-spinner">
+                            <div class="spinner"></div>
+                        </div>
+                        <h3 class="loading-title">Generating Your Music...</h3>
+                        <p class="loading-subtitle">Our AI is blending your patterns</p>
+                        <div class="loading-progress">
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="progress-fill"></div>
+                            </div>
+                            <span class="progress-text" id="progress-text">0%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Result Section -->
+                <div class="result-section" id="result-section" style="display: none;">
+                    <div class="result-card">
+                        <div class="result-header">
+                            <div class="result-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                                    <polyline points="22 4 12 14.01 9 11.01"/>
+                                </svg>
+                            </div>
+                            <h3 class="result-title">Your Music is Ready!</h3>
+                            <p class="result-subtitle">Listen to your AI-generated track</p>
+                        </div>
+
+                        <div class="result-player">
+                            <div class="waveform-container">
+                                <canvas id="waveform-result" class="waveform-canvas"></canvas>
+                            </div>
+                            <div class="player-controls">
+                                <button class="btn-icon btn-play" id="play-btn-result">
+                                    <svg class="icon-play" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M8 5v14l11-7z"/>
+                                    </svg>
+                                    <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
+                                        <path d="M6 4h4v16H6zM14 4h4v16h-4z"/>
+                                    </svg>
+                                </button>
+                                <div class="time-display">
+                                    <span id="current-time-result">0:00</span>
+                                    <span class="time-separator">/</span>
+                                    <span id="duration-result">0:00</span>
+                                </div>
+                                <div class="volume-control">
+                                    <svg class="icon-volume" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                                    </svg>
+                                    <input type="range" class="volume-slider" id="volume-result" min="0" max="100" value="80">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="result-actions">
+                            <button class="btn btn-primary btn-large" id="download-btn">
+                                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="7 10 12 15 17 10"/>
+                                    <line x1="12" y1="15" x2="12" y2="3"/>
+                                </svg>
+                                Download Track
+                            </button>
+                            <button class="btn btn-secondary" id="new-generation-btn">
+                                <svg class="btn-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <path d="M1 4v6h6"/>
+                                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                                </svg>
+                                Create Another
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-left">
+                    <p class="footer-text">© 2025 MusicLab. Powered by AI.</p>
+                </div>
+                <div class="footer-right">
+                    <a href="#" class="footer-link">Privacy</a>
+                    <a href="#" class="footer-link">Terms</a>
+                    <a href="#" class="footer-link">Contact</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
