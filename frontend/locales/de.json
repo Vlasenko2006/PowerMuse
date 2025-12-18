@@ -138,8 +138,8 @@
     "sampleTitle": "Beispiel-Generationen",
     "sampleDesc": "Höre Beispiele von MusicLab-generierter Musik. Jedes Beispiel zeigt die beiden Eingangstracks und die resultierende KI-generierte Fusion.",
     "example1": "Beispiel 1: Musikalische Musterfusion",
-    "inputA": "Eingangs-Track A",
-    "inputB": "Eingangs-Track B",
+    "inputA": "Eingangs-Track A: Vivaldi - August (Sturm)",
+    "inputB": "Eingangs-Track B: Emir Kusturica - Djinji Dinji",
     "output": "Generierte Ausgabe",
     "exampleDesc": "Dieses Beispiel demonstriert, wie MusicLab zwei unterschiedliche musikalische Muster in eine einzigartige Komposition fusioniert. Die KI lernt von beiden Eingangstracks und generiert neue Musik, die ihre Eigenschaften kombiniert."
   }

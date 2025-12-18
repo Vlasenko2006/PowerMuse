@@ -140,8 +140,8 @@
     "sampleTitle": "Exemples de Générations",
     "sampleDesc": "Écoutez des exemples de musique générée par MusicLab. Chaque exemple montre les deux pistes d'entrée et la fusion générée par l'IA résultante.",
     "example1": "Exemple 1: Fusion de Motifs Musicaux",
-    "inputA": "Piste d'Entrée A",
-    "inputB": "Piste d'Entrée B",
+    "inputA": "Piste d'entrée A: Vivaldi - Août (Tempête)",
+    "inputB": "Piste d'entrée B: Emir Kusturica - Djinji Dinji",
     "output": "Sortie Générée",
     "exampleDesc": "Cet exemple démontre comment MusicLab fusionne deux motifs musicaux distincts en une composition unique. L'IA apprend des deux pistes d'entrée et génère une nouvelle musique qui combine leurs caractéristiques."
   }

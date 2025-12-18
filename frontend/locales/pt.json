@@ -138,8 +138,8 @@
     "sampleTitle": "Gerações de Exemplo",
     "sampleDesc": "Ouça exemplos de música gerada pelo MusicLab. Cada exemplo mostra as duas faixas de entrada e a fusão gerada por IA resultante.",
     "example1": "Exemplo 1: Fusão de Padrões Musicais",
-    "inputA": "Faixa de Entrada A",
-    "inputB": "Faixa de Entrada B",
+    "inputA": "Faixa de entrada A: Vivaldi - Agosto (Tempestade)",
+    "inputB": "Faixa de entrada B: Emir Kusturica - Djinji Dinji",
     "output": "Saída Gerada",
     "exampleDesc": "Este exemplo demonstra como o MusicLab funde dois padrões musicais distintos em uma composição única. A IA aprende com ambas as faixas de entrada e gera nova música que combina suas características."
   }

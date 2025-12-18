@@ -7,8 +7,8 @@ const translations = {
         nav: { contact: 'Contact', examples: 'Examples', about: 'About' },
         hero: { title: 'Create Unique Music with AI', subtitle: 'Upload two tracks and let AI blend them into something new' },
         track: { 
-            title1: 'Input Track A', 
-            title2: 'Input Track B',
+            title1: 'Input Track A: Vivaldi - August(Storm)', 
+            title2: 'Input Track B: Emir Kusturica- Djinji Dinji',
             noFile: 'No file uploaded',
             uploadText: 'Drop audio file here or click to upload',
             uploadHint: 'MP3, WAV, OGG • Min 16 seconds'

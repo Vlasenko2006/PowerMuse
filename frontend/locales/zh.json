@@ -138,8 +138,8 @@
     "sampleTitle": "样本生成",
     "sampleDesc": "聆听MusicLab生成的音乐示例。每个示例显示两个输入轨道和由AI生成的融合结果。",
     "example1": "示例1: 音乐模式融合",
-    "inputA": "输入轨道A",
-    "inputB": "输入轨道B",
+    "inputA": "输入轨道A: 维瓦尔第 - 八月（暴风雨）",
+    "inputB": "输入轨道B: 埃米尔·库斯图里卡 - Djinji Dinji",
     "output": "生成输出",
     "exampleDesc": "此示例演示了MusicLab如何将两个不同的音乐模式融合成独特的作品。AI从两个输入轨道中学习,并生成结合其特征的新音乐。"
   }
