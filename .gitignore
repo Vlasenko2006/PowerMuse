@@ -119,3 +119,4 @@ slurm-*.out
 .bash_history
 .zsh_history
 backend/config/config_key.yaml
+.env
