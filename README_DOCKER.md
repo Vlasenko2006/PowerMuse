@@ -1,43 +1,72 @@
 # MusicLab Docker Deployment Guide
 
+**Quick reference for Docker deployment. See [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) for complete guide.**
+
 ## Prerequisites
 
 - Docker Engine 20.10+
 - Docker Compose 2.0+
-- At least 4GB free RAM
-- ~2GB disk space for images
+- 8GB free RAM (4GB instance + 4GB swap)
+- ~20GB disk space (model checkpoints + images)
+- Groq API key from https://console.groq.com
 
 ## Quick Start (Local)
 
-1. **Configure API Key**
+1. **Configure Environment**
    ```bash
-   cp config/config_key-example.yaml config/config_key.yaml
-   # Edit config/config_key.yaml and add your Groq API key
+   # Copy environment template
+   cp .env.example .env
+   
+   # Edit .env and add your Groq API key
+   nano .env
+   # Add: GROQ_API_KEY=gsk_your_actual_key_here
    ```
 
 2. **Build and Run**
    ```bash
-   docker-compose up --build -d
+   docker compose up --build -d
    ```
 
 3. **Access the Application**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8001
-   - API Health: http://localhost:8001/health
+   - **Frontend:** http://localhost (port 80)
+   - **Frontend (alt):** http://localhost:3000
+   - **Backend API:** http://localhost:8001 (internal only)
+   - **API Health:** http://localhost:8001/health
+   - **API Docs:** http://localhost:8001/docs
 
-4. **View Logs**
+4. **Verify Deployment**
    ```bash
-   # All services
-   docker-compose logs -f
+   # Check container health
+   docker ps
+   # Both should show (healthy)
    
-   # Specific service
-   docker-compose logs -f backend
-   docker-compose logs -f frontend
+   # Test backend
+   curl http://localhost:8001/health
+   
+   # Test frontend
+   curl -I http://localhost
    ```
 
-5. **Stop Services**
+5. **View Logs**
    ```bash
-   docker-compose down
+   # All services
+   docker compose logs -f
+   
+   # Specific service
+   docker compose logs -f backend
+   docker compose logs -f frontend
+   
+   # Last 50 lines
+   docker compose logs --tail=50
+   ```
+
+6. **Stop Services**
+   ```bash
+   # Stop but keep data
+   docker compose down
+   
+   # Stop and remove volumes (DELETES DATA!)
+   docker compose down -v
    ```
 
 ## Production Deployment (AWS EC2)

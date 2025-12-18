@@ -368,8 +368,58 @@ Add: `margin-top` to `.logo-icon` for fine-tuning
 ✅ **Complete:** Stem length, beam size, and positioning refined  
 ✅ **Complete:** Icon size adjusted to prevent bottom cutoff  
 ✅ **Complete:** Notes positioned close to cube for unified appearance  
+✅ **Complete:** Multilingual support with 8 languages (EN/DE/RU/FR/ES/PT/AR/ZH)  
+✅ **Complete:** Modular translation system with JSON files in `/frontend/locales/`  
+✅ **Complete:** About modal images fixed and copied to frontend  
+
+---
+
+## 🚀 How to Access the Application
+
+### Local Development
+
+The application must be accessed via HTTP server to enable all features (translations, API calls):
+
+```bash
+# Navigate to frontend directory
+cd /Users/andreyvlasenko/tst/Jingle_D/frontend
+
+# Start HTTP server on port 8080
+python3 -m http.server 8080
+
+# Open in browser
+http://localhost:8080
+```
+
+**⚠️ IMPORTANT:** 
+- **DO NOT** open `file:///path/to/frontend/index.html` directly
+- Direct file access blocks CORS and prevents:
+  - Loading translation JSON files from `/locales/`
+  - Making API calls to backend
+  - Proper functionality of Examples and About modals
+
+### Verify It's Working
+1. Open http://localhost:8080
+2. Click language selector (top-right corner)
+3. Switch between languages - text should update immediately
+4. Open "Examples" and "About" modals - should show translations
+5. About modal should display 3 images showing the workflow
+
+---
+
+## 📦 Next Steps: Docker Deployment to AWS
+
+**Planned Architecture:**
+- Frontend: nginx serving static files (port 80/443)
+- Backend: Python FastAPI (port 8001)
+- MLflow: Experiment tracking (port 5002)
+- Docker Compose orchestration
+- AWS EC2 deployment
 
 **Next potential adjustments:**
-- Fine-tune vertical alignment with "MusicLab" text if needed
-- Adjust transform Y value to perfect notes-to-cube spacing
-- Consider adding subtle shadow or glow effects (CSS)
+- Dockerize frontend with nginx
+- Dockerize backend with uvicorn
+- Create docker-compose.yml
+- Configure environment variables
+- Set up AWS EC2 instance
+- Deploy with CI/CD pipeline
