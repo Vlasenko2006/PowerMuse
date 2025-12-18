@@ -49,9 +49,22 @@
                     <h1>MusicLab</h1>
                 </div>
                 <nav class="nav">
-                    <a href="#" class="nav-link" id="contact-btn">Contact</a>
-                    <a href="#" class="nav-link" id="examples-btn">Examples</a>
-                    <a href="#" class="nav-link" id="about-btn">About</a>
+                    <a href="#" class="nav-link" id="contact-btn" data-i18n="nav.contact">Contact</a>
+                    <a href="#" class="nav-link" id="examples-btn" data-i18n="nav.examples">Examples</a>
+                    <a href="#" class="nav-link" id="about-btn" data-i18n="nav.about">About</a>
+                    <div class="language-selector">
+                        <button class="lang-btn" id="lang-btn">
+                            <span id="current-lang">EN</span>
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                <path d="M2 4L6 8L10 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                        <div class="lang-dropdown" id="lang-dropdown">
+                            <button class="lang-option" data-lang="en">English</button>
+                            <button class="lang-option" data-lang="de">Deutsch</button>
+                            <button class="lang-option" data-lang="ru">Русский</button>
+                        </div>
+                    </div>
                 </nav>
             </div>
         </div>
@@ -62,8 +75,8 @@
         <div class="container">
             <!-- Hero Section -->
             <section class="hero">
-                <h2 class="hero-title">AI-Powered Music Generation</h2>
-                <p class="hero-subtitle">Upload two tracks, select 16-second patterns, and let our AI create unique music</p>
+                <h2 class="hero-title" data-i18n="hero.title">Create Unique Music with AI</h2>
+                <p class="hero-subtitle" data-i18n="hero.subtitle">Upload two tracks and let AI blend them into something new</p>
             </section>
 
             <!-- Studio Section -->

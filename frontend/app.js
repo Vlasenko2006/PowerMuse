@@ -1,6 +1,70 @@
 // MusicLab - Main Application JavaScript
 // Handles audio upload, waveform visualization, pattern selection, and generation
 
+// Translations
+const translations = {
+    en: {
+        nav: { contact: 'Contact', examples: 'Examples', about: 'About' },
+        hero: { title: 'Create Unique Music with AI', subtitle: 'Upload two tracks and let AI blend them into something new' },
+        upload: { title: 'Upload Your Tracks', drop: 'Drop audio file here or click to browse', browse: 'Browse Files', supported: 'Supported: MP3, WAV, M4A, OGG' },
+        player: { selection: 'Time Selection', start: 'Start', end: 'End', seconds: 'seconds', preview: 'Preview Selection', stop: 'Stop', play: 'Play Full Track', volume: 'Volume' },
+        generate: { button: 'Generate New Track', processing: 'Processing...', ready: 'Upload both tracks to generate' },
+        result: { title: 'Generated Result', play: 'Play Result', stop: 'Stop', download: 'Download' },
+        contact: { label: 'Contact Email:' },
+        about: { title: 'About MusicLab', desc: 'MusicLab uses advanced AI to blend two music tracks, creating unique compositions. Upload your tracks, select time ranges, and let the AI create something new.' },
+        examples: { title: 'Example Outputs', close: 'Close' }
+    },
+    de: {
+        nav: { contact: 'Kontakt', examples: 'Beispiele', about: 'Über uns' },
+        hero: { title: 'Erstelle einzigartige Musik mit KI', subtitle: 'Lade zwei Tracks hoch und lass die KI sie zu etwas Neuem verschmelzen' },
+        upload: { title: 'Lade deine Tracks hoch', drop: 'Audiodatei hier ablegen oder klicken zum Durchsuchen', browse: 'Dateien durchsuchen', supported: 'Unterstützt: MP3, WAV, M4A, OGG' },
+        player: { selection: 'Zeitauswahl', start: 'Start', end: 'Ende', seconds: 'Sekunden', preview: 'Auswahl vorhören', stop: 'Stopp', play: 'Ganzen Track abspielen', volume: 'Lautstärke' },
+        generate: { button: 'Neuen Track generieren', processing: 'Verarbeitung...', ready: 'Lade beide Tracks hoch zum Generieren' },
+        result: { title: 'Generiertes Ergebnis', play: 'Ergebnis abspielen', stop: 'Stopp', download: 'Herunterladen' },
+        contact: { label: 'Kontakt E-Mail:' },
+        about: { title: 'Über MusicLab', desc: 'MusicLab verwendet fortschrittliche KI, um zwei Musiktracks zu vermischen und einzigartige Kompositionen zu erstellen. Laden Sie Ihre Tracks hoch, wählen Sie Zeitbereiche aus und lassen Sie die KI etwas Neues kreieren.' },
+        examples: { title: 'Beispiel-Ausgaben', close: 'Schließen' }
+    },
+    ru: {
+        nav: { contact: 'Контакт', examples: 'Примеры', about: 'О проекте' },
+        hero: { title: 'Создавайте уникальную музыку с ИИ', subtitle: 'Загрузите два трека и позвольте ИИ смешать их во что-то новое' },
+        upload: { title: 'Загрузите ваши треки', drop: 'Перетащите аудиофайл сюда или нажмите для выбора', browse: 'Выбрать файлы', supported: 'Поддерживается: MP3, WAV, M4A, OGG' },
+        player: { selection: 'Выбор времени', start: 'Начало', end: 'Конец', seconds: 'секунд', preview: 'Предпросмотр отрывка', stop: 'Стоп', play: 'Воспроизвести весь трек', volume: 'Громкость' },
+        generate: { button: 'Сгенерировать новый трек', processing: 'Обработка...', ready: 'Загрузите оба трека для генерации' },
+        result: { title: 'Сгенерированный результат', play: 'Воспроизвести результат', stop: 'Стоп', download: 'Скачать' },
+        contact: { label: 'Контактный email:' },
+        about: { title: 'О MusicLab', desc: 'MusicLab использует продвинутый ИИ для смешивания двух музыкальных треков, создавая уникальные композиции. Загрузите ваши треки, выберите временные диапазоны и позвольте ИИ создать что-то новое.' },
+        examples: { title: 'Примеры результатов', close: 'Закрыть' }
+    }
+};
+
+let currentLanguage = localStorage.getItem('language') || 'en';
+
+function setLanguage(lang) {
+    currentLanguage = lang;
+    localStorage.setItem('language', lang);
+    
+    // Update all elements with data-i18n attribute
+    document.querySelectorAll('[data-i18n]').forEach(element => {
+        const key = element.getAttribute('data-i18n');
+        const keys = key.split('.');
+        let value = translations[lang];
+        
+        for (const k of keys) {
+            value = value[k];
+            if (!value) break;
+        }
+        
+        if (value) {
+            element.textContent = value;
+        }
+    });
+    
+    // Update language button
+    const langMap = { en: 'EN', de: 'DE', ru: 'RU' };
+    document.getElementById('current-lang').textContent = langMap[lang];
+}
+
 class MusicLab {
     constructor() {
         this.tracks = {
@@ -1730,6 +1794,57 @@ function initializeContactButton() {
     });
 }
 
+// Initialize language selector
+function initializeLanguageSelector() {
+    const langBtn = document.getElementById('lang-btn');
+    const langDropdown = document.getElementById('lang-dropdown');
+    const langOptions = document.querySelectorAll('.lang-option');
+    
+    if (!langBtn || !langDropdown) return;
+    
+    // Toggle dropdown
+    langBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        langBtn.classList.toggle('active');
+        langDropdown.classList.toggle('show');
+    });
+    
+    // Language selection
+    langOptions.forEach(option => {
+        option.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const lang = this.getAttribute('data-lang');
+            
+            // Update active state
+            langOptions.forEach(opt => opt.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Set language
+            setLanguage(lang);
+            
+            // Close dropdown
+            langBtn.classList.remove('active');
+            langDropdown.classList.remove('show');
+        });
+        
+        // Set initial active state
+        if (option.getAttribute('data-lang') === currentLanguage) {
+            option.classList.add('active');
+        }
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!langBtn.contains(e.target) && !langDropdown.contains(e.target)) {
+            langBtn.classList.remove('active');
+            langDropdown.classList.remove('show');
+        }
+    });
+    
+    // Set initial language
+    setLanguage(currentLanguage);
+}
+
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     window.musicLab = new MusicLab();
@@ -1737,4 +1852,5 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeAboutModal();
     initializeExamplesModal();
     initializeContactButton();
+    initializeLanguageSelector();
 });

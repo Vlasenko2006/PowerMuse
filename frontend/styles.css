@@ -236,6 +236,90 @@ body {
     background-color: rgba(99, 102, 241, 0.1);
 }
 
+/* Language Selector */
+.language-selector {
+    position: relative;
+    margin-left: var(--spacing-md);
+}
+
+.lang-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: rgba(30, 30, 46, 0.8);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: var(--radius-md);
+    color: #888888;
+    font-weight: 500;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    backdrop-filter: blur(10px);
+}
+
+.lang-btn:hover {
+    background: rgba(40, 40, 60, 0.9);
+    border-color: rgba(99, 102, 241, 0.5);
+    color: #aaaaaa;
+}
+
+.lang-btn svg {
+    transition: transform var(--transition-fast);
+}
+
+.lang-btn.active svg {
+    transform: rotate(180deg);
+}
+
+.lang-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 140px;
+    background: rgba(30, 30, 46, 0.98);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: var(--radius-md);
+    padding: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all var(--transition-fast);
+    z-index: 1000;
+}
+
+.lang-dropdown.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.lang-option {
+    display: block;
+    width: 100%;
+    padding: 10px 14px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: #888888;
+    font-size: 14px;
+    text-align: left;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.lang-option:hover {
+    background: rgba(99, 102, 241, 0.2);
+    color: #aaaaaa;
+}
+
+.lang-option.active {
+    background: rgba(99, 102, 241, 0.3);
+    color: #6366f1;
+}
+
 /* ========================================
    Main Content
    ======================================== */
@@ -426,7 +510,7 @@ body {
     background-color: var(--bg-dark);
     border-radius: var(--radius-md);
     margin-bottom: var(--spacing-lg);
-    overflow: hidden;
+    overflow: visible;
 }
 
 .waveform-canvas {
