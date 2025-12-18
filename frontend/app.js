@@ -114,6 +114,12 @@ class MusicLab {
             this.tracks[trackNum].duration = audioBuffer.duration;
             this.tracks[trackNum].file = file;
             
+            // DEBUG: Check raw audio data
+            const rawData = audioBuffer.getChannelData(0);
+            const sampleMax = Math.max(...rawData.slice(0, 10000));
+            const sampleMin = Math.min(...rawData.slice(0, 10000));
+            console.log(`[RAW AUDIO] Track ${trackNum} - First 10k samples: min=${sampleMin.toFixed(4)}, max=${sampleMax.toFixed(4)}, length=${rawData.length}`);
+            
             // Show player
             document.getElementById(`upload-area-${trackNum}`).style.display = 'none';
             document.getElementById(`player-${trackNum}`).style.display = 'block';
@@ -165,7 +171,10 @@ class MusicLab {
         for (let i = 0; i < data.length; i++) {
             maxAmp = Math.max(maxAmp, Math.abs(data[i]));
         }
-        const scale = maxAmp > 0 ? 0.95 / maxAmp : 1; // Scale to 95% of available height
+        
+        // Scale to use 95% of canvas height
+        const scale = maxAmp > 0 ? 0.95 / maxAmp : 1.0;
+        console.log(`[WAVEFORM] Track ${trackNum} - maxAmp=${maxAmp.toFixed(4)}, scale=${scale.toFixed(2)}, canvasHeight=${height}px`);
         
         // Clear canvas
         ctx.clearRect(0, 0, width, height);
@@ -175,16 +184,34 @@ class MusicLab {
         ctx.strokeStyle = '#6366f1';
         ctx.lineWidth = 2;
         
+        // Sample a few points for debugging
+        const samplePoints = [0, Math.floor(width/4), Math.floor(width/2), Math.floor(3*width/4)];
+        const debugSamples = [];
+        
         for (let i = 0; i < width; i++) {
-            const min = Math.min(...data.slice(i * step, (i + 1) * step)) * scale;
-            const max = Math.max(...data.slice(i * step, (i + 1) * step)) * scale;
+            const slice = data.slice(i * step, (i + 1) * step);
+            const min = Math.min(...slice);
+            const max = Math.max(...slice);
+            
+            // Log samples for debugging
+            if (samplePoints.includes(i)) {
+                debugSamples.push({x: i, rawMin: min.toFixed(4), rawMax: max.toFixed(4)});
+            }
+            
+            // Apply scaling and convert to canvas coordinates
+            const minScaled = min * scale;
+            const maxScaled = max * scale;
+            const minY = amp - (minScaled * amp);
+            const maxY = amp - (maxScaled * amp);
             
             if (i === 0) {
-                ctx.moveTo(i, (1 + min) * amp);
+                ctx.moveTo(i, minY);
             }
-            ctx.lineTo(i, (1 + max) * amp);
-            ctx.lineTo(i, (1 + min) * amp);
+            ctx.lineTo(i, maxY);
+            ctx.lineTo(i, minY);
         }
+        
+        console.log(`[WAVEFORM SAMPLES] Track ${trackNum} - Sample points:`, debugSamples);
         
         ctx.stroke();
         
@@ -1631,10 +1658,83 @@ function initializeExamplesModal() {
     });
 }
 
+// Initialize Contact button
+function initializeContactButton() {
+    const btn = document.getElementById('contact-btn');
+    if (!btn) return;
+    
+    btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const email = 'andrey.vlasenko2006@gmail.com';
+        
+        // Get button position
+        const rect = btn.getBoundingClientRect();
+        
+        // Create dropdown element
+        const dropdown = document.createElement('div');
+        dropdown.style.cssText = `
+            position: fixed;
+            top: ${rect.bottom + 10}px;
+            left: ${rect.left}px;
+            background: rgba(30, 30, 46, 0.98);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            z-index: 10000;
+            animation: slideDown 0.3s ease-out;
+            backdrop-filter: blur(10px);
+            min-width: 250px;
+        `;
+        
+        dropdown.innerHTML = `
+            <div style="color: #e0e0e0; font-size: 14px; margin-bottom: 8px;">Contact Email:</div>
+            <div style="color: #6366f1; font-size: 16px; font-weight: 500; user-select: all;">${email}</div>
+        `;
+        
+        // Add animation keyframes if not already present
+        if (!document.getElementById('contact-animation-style')) {
+            const style = document.createElement('style');
+            style.id = 'contact-animation-style';
+            style.textContent = `
+                @keyframes slideDown {
+                    from {
+                        opacity: 0;
+                        transform: translateY(-10px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateY(0);
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        document.body.appendChild(dropdown);
+        
+        // Remove after 3 seconds
+        setTimeout(() => {
+            dropdown.style.animation = 'slideDown 0.3s ease-out reverse';
+            setTimeout(() => dropdown.remove(), 300);
+        }, 3000);
+        
+        // Remove on click anywhere
+        setTimeout(() => {
+            const removeDropdown = () => {
+                dropdown.remove();
+                document.removeEventListener('click', removeDropdown);
+            };
+            document.addEventListener('click', removeDropdown);
+        }, 100);
+    });
+}
+
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
     window.musicLab = new MusicLab();
     window.musicChatbot = new MusicChatbot();
     initializeAboutModal();
     initializeExamplesModal();
+    initializeContactButton();
 });
