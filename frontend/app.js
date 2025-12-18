@@ -6,49 +6,387 @@ const translations = {
     en: {
         nav: { contact: 'Contact', examples: 'Examples', about: 'About' },
         hero: { title: 'Create Unique Music with AI', subtitle: 'Upload two tracks and let AI blend them into something new' },
-        upload: { title: 'Upload Your Tracks', drop: 'Drop audio file here or click to browse', browse: 'Browse Files', supported: 'Supported: MP3, WAV, M4A, OGG' },
-        player: { selection: 'Time Selection', start: 'Start', end: 'End', seconds: 'seconds', preview: 'Preview Selection', stop: 'Stop', play: 'Play Full Track', volume: 'Volume' },
+        track: { 
+            title1: 'Input Track A', 
+            title2: 'Input Track B',
+            noFile: 'No file uploaded',
+            uploadText: 'Drop audio file here or click to upload',
+            uploadHint: 'MP3, WAV, OGG • Min 16 seconds'
+        },
+        upload: { 
+            title: 'Upload Your Tracks', 
+            drop: 'Drop audio file here or click to browse', 
+            browse: 'Browse Files', 
+            supported: 'Supported: MP3, WAV, M4A, OGG',
+            instruction: 'Upload Two Tracks to Begin',
+            instructionDetail: 'Select 16+ second audio files (MP3, WAV, OGG) for Track A and Track B. The Generate button will appear automatically.'
+        },
+        player: { 
+            selection: 'Time Selection', 
+            start: 'Start', 
+            end: 'End', 
+            seconds: 'seconds', 
+            preview: 'Preview Selection', 
+            stop: 'Stop', 
+            play: 'Play Full Track', 
+            volume: 'Volume',
+            playSelection: 'Play Selection',
+            clearTrack: 'Clear Track'
+        },
         generate: { button: 'Generate New Track', processing: 'Processing...', ready: 'Upload both tracks to generate' },
-        result: { title: 'Generated Result', play: 'Play Result', stop: 'Stop', download: 'Download' },
+        result: { title: 'Generated Result', play: 'Play Result', stop: 'Stop', download: 'Download', downloadTrack: 'Download Track' },
         contact: { label: 'Contact Email:' },
-        about: { title: 'About MusicLab', desc: 'MusicLab uses advanced AI to blend two music tracks, creating unique compositions. Upload your tracks, select time ranges, and let the AI create something new.' },
+        about: { 
+            title: 'About MusicLab',
+            welcome: 'Welcome to MusicLab',
+            whatIs: 'What is MusicLab?',
+            whatIsDesc: 'MusicLab is an innovative AI-powered music generation platform that creates entirely new music by fusing patterns from two input tracks. Think of it as a creative music mixer that learns from your favorite songs and generates something unique!',
+            howWorks: 'How Does It Work?',
+            step1Title: 'Upload Your Tracks',
+            step1Desc: 'Choose two audio files (MP3, WAV, M4A, or FLAC) - Track A and Track B. These can be any genre or style!',
+            step2Title: 'Select Time Windows',
+            step2Desc: 'Use the sliding controls to choose a 16-second segment from each track. This is where you pick the patterns you want to fuse.',
+            step3Title: 'AI Magic Happens',
+            step3Desc: 'Our SimpleTransformer model (16.7M parameters) analyzes both segments using EnCodec audio encoding and generates new musical patterns.',
+            step4Title: 'Download Your Creation',
+            step4Desc: 'Listen to the generated music and download it as a WAV file!',
+            close: 'Close',
+            interface: 'Understanding the Interface',
+            interfaceStep1: 'Step 1: Upload Your Music',
+            interfaceStep2: 'Step 2: Select Your Patterns',
+            interfaceStep3: 'Step 3: Generate and Download',
+            dragUpload: 'Drag/Upload Your Music Samples:',
+            dragUploadDesc: 'You can either drag and drop audio files directly onto the upload areas or click to browse your computer. Each track area accepts MP3, WAV, OGG, or FLAC files with a minimum duration of 16 seconds.',
+            trackAB: 'Track A and Track B:',
+            trackABDesc: 'Upload two different music tracks that you want to fuse together. The AI will learn patterns from both tracks to create something entirely new.',
+            chatbot: 'Musical Chatbot:',
+            chatbotDesc: 'Notice the floating eighth note icon in the bottom-right corner? That\'s MusicNote, your AI music assistant! Click it anytime to get help with pattern selection, music theory tips, or questions about how MusicLab works.',
+            waveform: 'Waveform Display:',
+            waveformDesc: 'Once uploaded, you\'ll see a visual waveform representation of your entire track. This helps you identify interesting sections with strong beats, melodies, or textures.',
+            slidingWindow: 'Sliding Window Control:',
+            slidingWindowDesc: 'Use the slider below each waveform to select exactly which 16-second segment you want to use. The blue highlighted area on the waveform shows your current selection. You can see the start and end times (in seconds) displayed below the waveform.',
+            playEntire: 'Play Entire Pattern:',
+            playEntireDesc: 'Click the large play button below the waveform to listen to your complete uploaded track from start to finish. This helps you explore the full song before making your selection.',
+            previewSel: 'Preview Selection:',
+            previewSelDesc: 'Use the "Preview Selection" button to listen to only the 16-second segment you\'ve chosen with the slider. This is the exact portion that will be sent to the AI for music generation.',
+            clearTrackTitle: 'Clear Track:',
+            clearTrackDesc: 'If you want to start over, click "Clear Track" to remove the uploaded file and begin again.',
+            durationInd: 'Duration Indicator:',
+            durationIndDesc: 'The blue "16.0 sec" indicator confirms that you\'ve selected a valid 16-second pattern. Both tracks must have a selection before you can generate music.',
+            playGen: 'Play Generated Music:',
+            playGenDesc: 'Once generation is complete, you\'ll see a new waveform showing your AI-created music. Click the play button to listen to the result. The player shows the current playback time and allows you to adjust volume.',
+            downloadTitle: 'Download Track:',
+            downloadDesc: 'Love what you created? Click the "Download Track" button to save your generated music as a high-quality WAV file to your computer. You can use this in your own projects!',
+            createAnother: 'Create Another:',
+            createAnotherDesc: 'Want to try different patterns or tracks? Click "Create Another" to return to the beginning and start a new fusion experiment.',
+            assistantTitle: 'MusicNote Assistant:',
+            assistantDesc: 'The chatbot is always available to help! You can ask questions like "What patterns work well together?" or "How can I improve my results?" MusicNote has deep knowledge of music theory and can guide you toward better creative combinations.',
+            why16: 'Why 16 Seconds?',
+            why16Desc: 'We use 16-second segments for several technical and creative reasons:',
+            why16Pattern: 'Pattern Recognition:',
+            why16PatternDesc: '16 seconds is long enough for the AI to recognize meaningful musical patterns like rhythm, melody, and harmony.',
+            why16Efficiency: 'Model Efficiency:',
+            why16EfficiencyDesc: 'Our EnCodec encoder works optimally with this duration, balancing quality and processing speed.',
+            why16Memory: 'Memory Constraints:',
+            why16MemoryDesc: 'Shorter segments allow for efficient processing on standard hardware without requiring expensive GPU resources.',
+            why16Structure: 'Musical Structure:',
+            why16StructureDesc: '16 seconds typically captures 1-2 musical phrases or bars (depending on tempo), which is enough context for creative fusion.',
+            why16Focus: 'Focus:',
+            why16FocusDesc: 'It forces you to choose the most interesting part of each track, leading to more creative results!',
+            tips: 'Tips for Best Results',
+            tipRhythm: 'Complementary Rhythms',
+            tipRhythmDesc: 'Choose one track with a strong beat and another with a compelling melody. This creates interesting interplay between rhythm and melodic elements.',
+            tipHarmony: 'Harmonic Compatibility',
+            tipHarmonyDesc: 'Tracks in the same or related keys (e.g., C major and A minor) work best together. This ensures harmonies blend smoothly without clashing.',
+            tipEnergy: 'Energy Balance',
+            tipEnergyDesc: 'Mix high-energy sections with calmer ones for interesting dynamic contrast. This adds emotional depth and keeps listeners engaged.',
+            tipTimbral: 'Timbral Variety',
+            tipTimbralDesc: 'Different instruments (e.g., guitar + piano) create richer fusions. Combining diverse timbres adds texture and complexity to the output.',
+            tipSilence: 'Avoid Silence',
+            tipSilenceDesc: 'Choose segments with actual musical content, not silent or very quiet parts. The AI needs sufficient information to generate compelling patterns.',
+            tipExperiment: 'Experiment!',
+            tipExperimentDesc: 'Try unexpected combinations - sometimes the most creative results come from unlikely pairings. Don\'t be afraid to mix different genres!',
+            technical: 'Technical Details',
+            needHelp: 'Need Help?',
+            needHelpDesc: 'Click the floating eighth note icon in the bottom-right corner to chat with MusicNote, our AI music assistant! MusicNote can help you with:',
+            helpUnderstand: 'Understanding how MusicLab\'s AI model works',
+            helpChoose: 'Choosing the best pattern combinations for creative results',
+            helpTheory: 'Music theory concepts and production techniques',
+            helpTechnical: 'Technical questions about audio formats and processing',
+            helpInspiration: 'Creative inspiration and suggestions for your next fusion',
+            helpTrouble: 'Troubleshooting any issues you encounter',
+            helpConversation: 'MusicNote maintains conversation history throughout your session, so you can have a natural dialogue about your music creation process. The chatbot is knowledgeable, friendly, and always ready to assist you in making the most creative music possible!'
+        },
         examples: { title: 'Example Outputs', close: 'Close' }
     },
     de: {
         nav: { contact: 'Kontakt', examples: 'Beispiele', about: 'Über uns' },
         hero: { title: 'Erstelle einzigartige Musik mit KI', subtitle: 'Lade zwei Tracks hoch und lass die KI sie zu etwas Neuem verschmelzen' },
-        upload: { title: 'Lade deine Tracks hoch', drop: 'Audiodatei hier ablegen oder klicken zum Durchsuchen', browse: 'Dateien durchsuchen', supported: 'Unterstützt: MP3, WAV, M4A, OGG' },
-        player: { selection: 'Zeitauswahl', start: 'Start', end: 'Ende', seconds: 'Sekunden', preview: 'Auswahl vorhören', stop: 'Stopp', play: 'Ganzen Track abspielen', volume: 'Lautstärke' },
+        track: { 
+            title1: 'Eingangs-Track A', 
+            title2: 'Eingangs-Track B',
+            noFile: 'Keine Datei hochgeladen',
+            uploadText: 'Audiodatei hier ablegen oder klicken zum Hochladen',
+            uploadHint: 'MP3, WAV, OGG • Min. 16 Sekunden'
+        },
+        upload: { 
+            title: 'Lade deine Tracks hoch', 
+            drop: 'Audiodatei hier ablegen oder klicken zum Durchsuchen', 
+            browse: 'Dateien durchsuchen', 
+            supported: 'Unterstützt: MP3, WAV, M4A, OGG',
+            instruction: 'Lade zwei Tracks hoch um zu beginnen',
+            instructionDetail: 'Wähle Audiodateien mit 16+ Sekunden (MP3, WAV, OGG) für Track A und Track B. Der Generieren-Button erscheint automatisch.'
+        },
+        player: { 
+            selection: 'Zeitauswahl', 
+            start: 'Start', 
+            end: 'Ende', 
+            seconds: 'Sekunden', 
+            preview: 'Auswahl vorhören', 
+            stop: 'Stopp', 
+            play: 'Ganzen Track abspielen', 
+            volume: 'Lautstärke',
+            playSelection: 'Auswahl abspielen',
+            clearTrack: 'Track löschen'
+        },
         generate: { button: 'Neuen Track generieren', processing: 'Verarbeitung...', ready: 'Lade beide Tracks hoch zum Generieren' },
-        result: { title: 'Generiertes Ergebnis', play: 'Ergebnis abspielen', stop: 'Stopp', download: 'Herunterladen' },
+        result: { title: 'Generiertes Ergebnis', play: 'Ergebnis abspielen', stop: 'Stopp', download: 'Herunterladen', downloadTrack: 'Track herunterladen' },
         contact: { label: 'Kontakt E-Mail:' },
-        about: { title: 'Über MusicLab', desc: 'MusicLab verwendet fortschrittliche KI, um zwei Musiktracks zu vermischen und einzigartige Kompositionen zu erstellen. Laden Sie Ihre Tracks hoch, wählen Sie Zeitbereiche aus und lassen Sie die KI etwas Neues kreieren.' },
+        about: { 
+            title: 'Über MusicLab',
+            welcome: 'Willkommen bei MusicLab',
+            whatIs: 'Was ist MusicLab?',
+            whatIsDesc: 'MusicLab ist eine innovative KI-gestützte Musikgenerierungsplattform, die völlig neue Musik erstellt, indem sie Muster aus zwei Eingangstracks fusioniert. Betrachten Sie es als kreativen Musikmixer, der von Ihren Lieblingsliedern lernt und etwas Einzigartiges generiert!',
+            howWorks: 'Wie funktioniert es?',
+            step1Title: 'Lade deine Tracks hoch',
+            step1Desc: 'Wähle zwei Audiodateien (MP3, WAV, M4A oder FLAC) - Track A und Track B. Diese können jedes Genre oder jeden Stil haben!',
+            step2Title: 'Wähle Zeitfenster',
+            step2Desc: 'Verwende die Schieberegler, um ein 16-Sekunden-Segment von jedem Track auszuwählen. Hier wählst du die Muster aus, die du fusionieren möchtest.',
+            step3Title: 'KI-Magie geschieht',
+            step3Desc: 'Unser SimpleTransformer-Modell (16,7M Parameter) analysiert beide Segmente mit EnCodec-Audiocodierung und generiert neue musikalische Muster.',
+            step4Title: 'Lade deine Kreation herunter',
+            step4Desc: 'Höre dir die generierte Musik an und lade sie als WAV-Datei herunter!',
+            close: 'Schließen',
+            interface: 'Die Benutzeroberfläche verstehen',
+            interfaceStep1: 'Schritt 1: Lade deine Musik hoch',
+            interfaceStep2: 'Schritt 2: Wähle deine Muster',
+            interfaceStep3: 'Schritt 3: Generieren und Herunterladen',
+            dragUpload: 'Drag & Drop/Hochladen:',
+            dragUploadDesc: 'Du kannst Audiodateien direkt in die Upload-Bereiche ziehen oder auf den Computer durchsuchen klicken. Jeder Track-Bereich akzeptiert MP3, WAV, OGG oder FLAC-Dateien mit einer Mindestdauer von 16 Sekunden.',
+            trackAB: 'Track A und Track B:',
+            trackABDesc: 'Lade zwei verschiedene Musiktracks hoch, die du fusionieren möchtest. Die KI lernt Muster aus beiden Tracks, um etwas völlig Neues zu erstellen.',
+            chatbot: 'Musik-Chatbot:',
+            chatbotDesc: 'Beachte das schwebende Achtelnoten-Symbol in der unteren rechten Ecke? Das ist MusicNote, dein KI-Musikassistent! Klicke jederzeit darauf, um Hilfe bei der Musterauswahl, Musiktheorie-Tipps oder Fragen zur Funktionsweise von MusicLab zu erhalten.',
+            waveform: 'Wellenform-Anzeige:',
+            waveformDesc: 'Nach dem Hochladen siehst du eine visuelle Wellenform-Darstellung deines gesamten Tracks. Dies hilft dir, interessante Abschnitte mit starken Beats, Melodien oder Texturen zu identifizieren.',
+            slidingWindow: 'Schieberegler-Steuerung:',
+            slidingWindowDesc: 'Verwende den Schieberegler unter jeder Wellenform, um genau das 16-Sekunden-Segment auszuwählen, das du verwenden möchtest. Der blau hervorgehobene Bereich auf der Wellenform zeigt deine aktuelle Auswahl. Du kannst die Start- und Endzeiten (in Sekunden) unter der Wellenform sehen.',
+            playEntire: 'Gesamtes Muster abspielen:',
+            playEntireDesc: 'Klicke auf die große Play-Taste unter der Wellenform, um deinen vollständig hochgeladenen Track von Anfang bis Ende anzuhören. Dies hilft dir, das gesamte Lied zu erkunden, bevor du deine Auswahl triffst.',
+            previewSel: 'Auswahl vorhören:',
+            previewSelDesc: 'Verwende die "Auswahl vorhören"-Taste, um nur das 16-Sekunden-Segment anzuhören, das du mit dem Schieberegler ausgewählt hast. Dies ist der genaue Teil, der zur KI-Musikgenerierung gesendet wird.',
+            clearTrackTitle: 'Track löschen:',
+            clearTrackDesc: 'Wenn du von vorne beginnen möchtest, klicke auf "Track löschen", um die hochgeladene Datei zu entfernen und erneut zu beginnen.',
+            durationInd: 'Dauer-Anzeige:',
+            durationIndDesc: 'Die blaue "16.0 sec"-Anzeige bestätigt, dass du ein gültiges 16-Sekunden-Muster ausgewählt hast. Beide Tracks müssen eine Auswahl haben, bevor du Musik generieren kannst.',
+            playGen: 'Generierte Musik abspielen:',
+            playGenDesc: 'Nach Abschluss der Generierung siehst du eine neue Wellenform, die deine von der KI erstellte Musik zeigt. Klicke auf die Play-Taste, um das Ergebnis anzuhören. Der Player zeigt die aktuelle Wiedergabezeit und ermöglicht die Lautstärkeregelung.',
+            downloadTitle: 'Track herunterladen:',
+            downloadDesc: 'Liebst du, was du erstellt hast? Klicke auf die "Track herunterladen"-Taste, um deine generierte Musik als hochwertige WAV-Datei auf deinen Computer zu speichern. Du kannst sie in deinen eigenen Projekten verwenden!',
+            createAnother: 'Weitere erstellen:',
+            createAnotherDesc: 'Möchtest du verschiedene Muster oder Tracks ausprobieren? Klicke auf "Weitere erstellen", um zum Anfang zurückzukehren und ein neues Fusions-Experiment zu starten.',
+            assistantTitle: 'MusicNote-Assistent:',
+            assistantDesc: 'Der Chatbot ist immer verfügbar, um zu helfen! Du kannst Fragen stellen wie "Welche Muster funktionieren gut zusammen?" oder "Wie kann ich meine Ergebnisse verbessern?" MusicNote hat tiefes Wissen über Musiktheorie und kann dich zu besseren kreativen Kombinationen führen.',
+            why16: 'Warum 16 Sekunden?',
+            why16Desc: 'Wir verwenden 16-Sekunden-Segmente aus mehreren technischen und kreativen Gründen:',
+            why16Pattern: 'Mustererkennung:',
+            why16PatternDesc: '16 Sekunden sind lang genug, damit die KI bedeutsame musikalische Muster wie Rhythmus, Melodie und Harmonie erkennen kann.',
+            why16Efficiency: 'Modell-Effizienz:',
+            why16EfficiencyDesc: 'Unser EnCodec-Encoder funktioniert mit dieser Dauer optimal und gleicht Qualität und Verarbeitungsgeschwindigkeit aus.',
+            why16Memory: 'Speicher-Einschränkungen:',
+            why16MemoryDesc: 'Kürzere Segmente ermöglichen eine effiziente Verarbeitung auf Standard-Hardware ohne teure GPU-Ressourcen.',
+            why16Structure: 'Musikalische Struktur:',
+            why16StructureDesc: '16 Sekunden erfassen typischerweise 1-2 musikalische Phrasen oder Takte (je nach Tempo), was genug Kontext für kreative Fusion ist.',
+            why16Focus: 'Fokus:',
+            why16FocusDesc: 'Es zwingt dich, den interessantesten Teil jedes Tracks zu wählen, was zu kreativeren Ergebnissen führt!',
+            tips: 'Tipps für beste Ergebnisse',
+            tipRhythm: 'Komplementäre Rhythmen',
+            tipRhythmDesc: 'Wähle einen Track mit starkem Beat und einen anderen mit überzeugender Melodie. Dies erzeugt interessantes Zusammenspiel zwischen Rhythmus und melodischen Elementen.',
+            tipHarmony: 'Harmonische Kompatibilität',
+            tipHarmonyDesc: 'Tracks in derselben oder verwandten Tonart (z.B. C-Dur und A-Moll) funktionieren am besten zusammen. Dies stellt sicher, dass Harmonien sanft verschmelzen ohne zu kollidieren.',
+            tipEnergy: 'Energie-Balance',
+            tipEnergyDesc: 'Mische energiereiche Abschnitte mit ruhigeren für interessanten dynamischen Kontrast. Dies fügt emotionale Tiefe hinzu und hält Zuhörer engagiert.',
+            tipTimbral: 'Klangfarben-Vielfalt',
+            tipTimbralDesc: 'Verschiedene Instrumente (z.B. Gitarre + Klavier) erzeugen reichhaltigere Fusionen. Die Kombination verschiedener Klangfarben fügt Textur und Komplexität hinzu.',
+            tipSilence: 'Stille vermeiden',
+            tipSilenceDesc: 'Wähle Segmente mit tatsächlichem musikalischem Inhalt, nicht stille oder sehr leise Teile. Die KI benötigt ausreichend Informationen, um überzeugende Muster zu generieren.',
+            tipExperiment: 'Experimentiere!',
+            tipExperimentDesc: 'Probiere unerwartete Kombinationen - manchmal kommen die kreativsten Ergebnisse von unwahrscheinlichen Paarungen. Hab keine Angst, verschiedene Genres zu mischen!',
+            technical: 'Technische Details',
+            needHelp: 'Brauchst du Hilfe?',
+            needHelpDesc: 'Klicke auf das schwebende Achtelnoten-Symbol in der unteren rechten Ecke, um mit MusicNote, unserem KI-Musikassistenten, zu chatten! MusicNote kann dir helfen mit:',
+            helpUnderstand: 'Verständnis, wie das KI-Modell von MusicLab funktioniert',
+            helpChoose: 'Auswahl der besten Musterkombinationen für kreative Ergebnisse',
+            helpTheory: 'Musiktheorie-Konzepte und Produktionstechniken',
+            helpTechnical: 'Technische Fragen zu Audioformaten und -verarbeitung',
+            helpInspiration: 'Kreative Inspiration und Vorschläge für deine nächste Fusion',
+            helpTrouble: 'Fehlerbehebung bei auftretenden Problemen',
+            helpConversation: 'MusicNote behält den Gesprächsverlauf während deiner Sitzung bei, sodass du einen natürlichen Dialog über deinen Musikschaffungsprozess führen kannst. Der Chatbot ist sachkundig, freundlich und immer bereit, dir zu helfen, die kreativste Musik zu erstellen!'
+        },
         examples: { title: 'Beispiel-Ausgaben', close: 'Schließen' }
     },
     ru: {
         nav: { contact: 'Контакт', examples: 'Примеры', about: 'О проекте' },
         hero: { title: 'Создавайте уникальную музыку с ИИ', subtitle: 'Загрузите два трека и позвольте ИИ смешать их во что-то новое' },
-        upload: { title: 'Загрузите ваши треки', drop: 'Перетащите аудиофайл сюда или нажмите для выбора', browse: 'Выбрать файлы', supported: 'Поддерживается: MP3, WAV, M4A, OGG' },
-        player: { selection: 'Выбор времени', start: 'Начало', end: 'Конец', seconds: 'секунд', preview: 'Предпросмотр отрывка', stop: 'Стоп', play: 'Воспроизвести весь трек', volume: 'Громкость' },
+        track: { 
+            title1: 'Входной трек A', 
+            title2: 'Входной трек B',
+            noFile: 'Файл не загружен',
+            uploadText: 'Перетащите аудиофайл сюда или нажмите для загрузки',
+            uploadHint: 'MP3, WAV, OGG • Мин. 16 секунд'
+        },
+        upload: { 
+            title: 'Загрузите ваши треки', 
+            drop: 'Перетащите аудиофайл сюда или нажмите для выбора', 
+            browse: 'Выбрать файлы', 
+            supported: 'Поддерживается: MP3, WAV, M4A, OGG',
+            instruction: 'Загрузите два трека для начала',
+            instructionDetail: 'Выберите аудиофайлы длиной 16+ секунд (MP3, WAV, OGG) для трека A и трека B. Кнопка генерации появится автоматически.'
+        },
+        player: { 
+            selection: 'Выбор времени', 
+            start: 'Начало', 
+            end: 'Конец', 
+            seconds: 'секунд', 
+            preview: 'Предпросмотр отрывка', 
+            stop: 'Стоп', 
+            play: 'Воспроизвести весь трек', 
+            volume: 'Громкость',
+            playSelection: 'Воспроизвести выбранное',
+            clearTrack: 'Очистить трек'
+        },
         generate: { button: 'Сгенерировать новый трек', processing: 'Обработка...', ready: 'Загрузите оба трека для генерации' },
-        result: { title: 'Сгенерированный результат', play: 'Воспроизвести результат', stop: 'Стоп', download: 'Скачать' },
+        result: { title: 'Сгенерированный результат', play: 'Воспроизвести результат', stop: 'Стоп', download: 'Скачать', downloadTrack: 'Скачать трек' },
         contact: { label: 'Контактный email:' },
-        about: { title: 'О MusicLab', desc: 'MusicLab использует продвинутый ИИ для смешивания двух музыкальных треков, создавая уникальные композиции. Загрузите ваши треки, выберите временные диапазоны и позвольте ИИ создать что-то новое.' },
+        about: { 
+            title: 'О MusicLab',
+            welcome: 'Добро пожаловать в MusicLab',
+            whatIs: 'Что такое MusicLab?',
+            whatIsDesc: 'MusicLab — это инновационная платформа для генерации музыки на основе ИИ, которая создает совершенно новую музыку, объединяя паттерны из двух входных треков. Думайте о ней как о креативном музыкальном миксере, который учится на ваших любимых песнях и генерирует что-то уникальное!',
+            howWorks: 'Как это работает?',
+            step1Title: 'Загрузите ваши треки',
+            step1Desc: 'Выберите два аудиофайла (MP3, WAV, M4A или FLAC) - Трек A и Трек B. Это могут быть любые жанры или стили!',
+            step2Title: 'Выберите временные окна',
+            step2Desc: 'Используйте ползунки, чтобы выбрать 16-секундный сегмент из каждого трека. Здесь вы выбираете паттерны, которые хотите объединить.',
+            step3Title: 'Магия ИИ в действии',
+            step3Desc: 'Наша модель SimpleTransformer (16.7M параметров) анализирует оба сегмента с использованием аудиокодирования EnCodec и генерирует новые музыкальные паттерны.',
+            step4Title: 'Скачайте ваше творение',
+            step4Desc: 'Прослушайте сгенерированную музыку и скачайте её как WAV-файл!',
+            close: 'Закрыть',
+            interface: 'Понимание интерфейса',
+            interfaceStep1: 'Шаг 1: Загрузите вашу музыку',
+            interfaceStep2: 'Шаг 2: Выберите ваши паттерны',
+            interfaceStep3: 'Шаг 3: Сгенерируйте и скачайте',
+            dragUpload: 'Перетаскивание/Загрузка:',
+            dragUploadDesc: 'Вы можете перетащить аудиофайлы прямо в области загрузки или нажать, чтобы выбрать на компьютере. Каждая область трека принимает файлы MP3, WAV, OGG или FLAC с минимальной длительностью 16 секунд.',
+            trackAB: 'Трек A и Трек B:',
+            trackABDesc: 'Загрузите два разных музыкальных трека, которые вы хотите объединить. ИИ изучит паттерны обоих треков, чтобы создать что-то совершенно новое.',
+            chatbot: 'Музыкальный чат-бот:',
+            chatbotDesc: 'Заметили плавающий значок восьмой ноты в правом нижнем углу? Это MusicNote, ваш музыкальный помощник на базе ИИ! Нажмите в любое время, чтобы получить помощь с выбором паттернов, советы по теории музыки или ответы на вопросы о работе MusicLab.',
+            waveform: 'Отображение волны:',
+            waveformDesc: 'После загрузки вы увидите визуальное представление волны всего трека. Это поможет вам определить интересные секции с сильными битами, мелодиями или текстурами.',
+            slidingWindow: 'Управление ползунком:',
+            slidingWindowDesc: 'Используйте ползунок под каждой волной, чтобы выбрать именно тот 16-секундный сегмент, который вы хотите использовать. Синяя выделенная область на волне показывает ваш текущий выбор. Вы можете видеть время начала и окончания (в секундах) под волной.',
+            playEntire: 'Воспроизвести весь паттерн:',
+            playEntireDesc: 'Нажмите большую кнопку воспроизведения под волной, чтобы прослушать ваш полностью загруженный трек от начала до конца. Это поможет вам изучить всю песню перед выбором.',
+            previewSel: 'Предпросмотр выбора:',
+            previewSelDesc: 'Используйте кнопку "Предпросмотр выбора", чтобы прослушать только 16-секундный сегмент, который вы выбрали ползунком. Это именно та часть, которая будет отправлена ИИ для генерации музыки.',
+            clearTrackTitle: 'Очистить трек:',
+            clearTrackDesc: 'Если вы хотите начать заново, нажмите "Очистить трек", чтобы удалить загруженный файл и начать снова.',
+            durationInd: 'Индикатор длительности:',
+            durationIndDesc: 'Синий индикатор "16.0 sec" подтверждает, что вы выбрали действительный 16-секундный паттерн. Оба трека должны иметь выбор, прежде чем вы сможете генерировать музыку.',
+            playGen: 'Воспроизвести сгенерированную музыку:',
+            playGenDesc: 'После завершения генерации вы увидите новую волну, показывающую вашу созданную ИИ музыку. Нажмите кнопку воспроизведения, чтобы прослушать результат. Плеер показывает текущее время воспроизведения и позволяет регулировать громкость.',
+            downloadTitle: 'Скачать трек:',
+            downloadDesc: 'Нравится то, что вы создали? Нажмите кнопку "Скачать трек", чтобы сохранить вашу сгенерированную музыку как высококачественный WAV-файл на ваш компьютер. Вы можете использовать её в своих проектах!',
+            createAnother: 'Создать ещё:',
+            createAnotherDesc: 'Хотите попробовать разные паттерны или треки? Нажмите "Создать ещё", чтобы вернуться к началу и начать новый эксперимент по объединению.',
+            assistantTitle: 'Помощник MusicNote:',
+            assistantDesc: 'Чат-бот всегда доступен для помощи! Вы можете задавать вопросы типа "Какие паттерны хорошо работают вместе?" или "Как я могу улучшить мои результаты?" MusicNote обладает глубокими знаниями теории музыки и может направить вас к лучшим творческим комбинациям.',
+            why16: 'Почему 16 секунд?',
+            why16Desc: 'Мы используем 16-секундные сегменты по нескольким техническим и творческим причинам:',
+            why16Pattern: 'Распознавание паттернов:',
+            why16PatternDesc: '16 секунд достаточно долго для ИИ, чтобы распознать значимые музыкальные паттерны, такие как ритм, мелодия и гармония.',
+            why16Efficiency: 'Эффективность модели:',
+            why16EfficiencyDesc: 'Наш кодировщик EnCodec работает оптимально с этой длительностью, балансируя качество и скорость обработки.',
+            why16Memory: 'Ограничения памяти:',
+            why16MemoryDesc: 'Более короткие сегменты позволяют эффективную обработку на стандартном оборудовании без необходимости дорогих GPU-ресурсов.',
+            why16Structure: 'Музыкальная структура:',
+            why16StructureDesc: '16 секунд обычно захватывают 1-2 музыкальные фразы или такта (в зависимости от темпа), что является достаточным контекстом для творческого объединения.',
+            why16Focus: 'Фокус:',
+            why16FocusDesc: 'Это заставляет вас выбрать самую интересную часть каждого трека, что приводит к более творческим результатам!',
+            tips: 'Советы для лучших результатов',
+            tipRhythm: 'Дополняющие ритмы',
+            tipRhythmDesc: 'Выберите один трек с сильным битом и другой с убедительной мелодией. Это создает интересное взаимодействие между ритмом и мелодическими элементами.',
+            tipHarmony: 'Гармоническая совместимость',
+            tipHarmonyDesc: 'Треки в одной или родственных тональностях (например, C мажор и A минор) работают лучше всего вместе. Это гарантирует, что гармонии сливаются плавно без столкновений.',
+            tipEnergy: 'Баланс энергии',
+            tipEnergyDesc: 'Смешивайте высокоэнергетичные секции с более спокойными для интересного динамического контраста. Это добавляет эмоциональную глубину и удерживает слушателей.',
+            tipTimbral: 'Тембральное разнообразие',
+            tipTimbralDesc: 'Разные инструменты (например, гитара + фортепиано) создают более богатые объединения. Сочетание различных тембров добавляет текстуру и сложность.',
+            tipSilence: 'Избегайте тишины',
+            tipSilenceDesc: 'Выбирайте сегменты с фактическим музыкальным содержанием, а не тихие или очень тихие части. ИИ нужна достаточная информация для генерации убедительных паттернов.',
+            tipExperiment: 'Экспериментируйте!',
+            tipExperimentDesc: 'Попробуйте неожиданные комбинации - иногда самые творческие результаты приходят из неожиданных пар. Не бойтесь смешивать разные жанры!',
+            technical: 'Технические детали',
+            needHelp: 'Нужна помощь?',
+            needHelpDesc: 'Нажмите на плавающий значок восьмой ноты в правом нижнем углу, чтобы пообщаться с MusicNote, нашим музыкальным помощником на базе ИИ! MusicNote может помочь вам с:',
+            helpUnderstand: 'Пониманием работы ИИ-модели MusicLab',
+            helpChoose: 'Выбором лучших комбинаций паттернов для творческих результатов',
+            helpTheory: 'Концепциями теории музыки и техниками производства',
+            helpTechnical: 'Техническими вопросами об аудиоформатах и обработке',
+            helpInspiration: 'Творческим вдохновением и предложениями для вашего следующего объединения',
+            helpTrouble: 'Устранением неполадок, с которыми вы сталкиваетесь',
+            helpConversation: 'MusicNote сохраняет историю разговора на протяжении всей вашей сессии, так что вы можете вести естественный диалог о вашем процессе создания музыки. Чат-бот знающий, дружелюбный и всегда готов помочь вам создать самую креативную музыку!'
+        },
         examples: { title: 'Примеры результатов', close: 'Закрыть' }
     }
 };
 
 let currentLanguage = localStorage.getItem('language') || 'en';
+let loadedTranslations = {};
 
-function setLanguage(lang) {
+async function loadTranslations(lang) {
+    // Try to load from JSON file, fallback to embedded translations
+    try {
+        const response = await fetch(`/locales/${lang}.json`);
+        if (response.ok) {
+            loadedTranslations[lang] = await response.json();
+            return loadedTranslations[lang];
+        }
+    } catch (e) {
+        console.warn(`Failed to load ${lang}.json, using embedded translations`);
+    }
+    // Fallback to embedded translations if JSON file not found
+    return translations[lang] || translations['en'];
+}
+
+async function setLanguage(lang) {
     currentLanguage = lang;
     localStorage.setItem('language', lang);
+    
+    // Load translations if not already loaded
+    if (!loadedTranslations[lang]) {
+        loadedTranslations[lang] = await loadTranslations(lang);
+    }
+    
+    const langData = loadedTranslations[lang];
     
     // Update all elements with data-i18n attribute
     document.querySelectorAll('[data-i18n]').forEach(element => {
         const key = element.getAttribute('data-i18n');
         const keys = key.split('.');
-        let value = translations[lang];
+        let value = langData;
         
         for (const k of keys) {
             value = value[k];
@@ -61,7 +399,10 @@ function setLanguage(lang) {
     });
     
     // Update language button
-    const langMap = { en: 'EN', de: 'DE', ru: 'RU' };
+    const langMap = { 
+        en: 'EN', de: 'DE', ru: 'RU', fr: 'FR', 
+        es: 'ES', pt: 'PT', ar: 'AR', zh: '中文' 
+    };
     document.getElementById('current-lang').textContent = langMap[lang];
 }
 
@@ -1841,12 +2182,15 @@ function initializeLanguageSelector() {
         }
     });
     
-    // Set initial language
+    // Set initial language (async)
     setLanguage(currentLanguage);
 }
 
 // Initialize app when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // Load initial language first
+    await setLanguage(currentLanguage);
+    
     window.musicLab = new MusicLab();
     window.musicChatbot = new MusicChatbot();
     initializeAboutModal();
