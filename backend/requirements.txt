@@ -8,13 +8,11 @@ soundfile==0.12.1
 librosa==0.10.1
 encodec==0.1.1
 
-# Machine Learning
+# Machine Learning - CPU only for inference (saves 3GB+ vs CUDA)
+--extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.1.0
 numpy==1.24.3
 
 # Chatbot
-groq==0.4.1
+groq>=0.11.0
 pyyaml==6.0.1
-
-# CORS
-python-cors==1.0.0

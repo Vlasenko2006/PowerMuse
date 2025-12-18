@@ -27,6 +27,20 @@ treble/
 # Backups
 bkup/
 bkup_*/
+bkup*/
+14122025_2356/
+best_checkpoints/
+
+# Cache and large folders
+cache/
+cache_noisy/
+Checkpoints_GAN/
+*.pt.bak
+*.bkp
+
+# Only backend and frontend folders needed
+!backend/
+!frontend/
 
 # Git
 .git/

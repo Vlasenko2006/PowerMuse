@@ -34,12 +34,7 @@ import os
 os.environ["PATH"] += os.pathsep + "/usr/local/bin"
 print(f"DEBUG: Added /usr/local/bin to PATH")
 
-# Add parent directory to path for imports
-parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, parent_dir)
-print(f"DEBUG: Added to sys.path: {parent_dir}")
-
-# Import your model
+# Import your model (now in same directory)
 print("DEBUG: Importing model_simple_transformer...")
 from model_simple_transformer import SimpleTransformer
 print("DEBUG: Importing encodec...")

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   backend:
     build:
@@ -10,14 +8,12 @@ services:
     ports:
       - "8001:8001"
     volumes:
-      - ./config:/app/config:ro
-      - ./checkpoints:/app/checkpoints:ro
-      - ./uploads:/app/uploads
       - uploads:/app/uploads  # Named volume for persistence
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONPATH=/app
       - GROQ_API_KEY=${GROQ_API_KEY}
+      - MODEL_CHECKPOINT=best_model.pt
     env_file:
       - .env
     networks:
