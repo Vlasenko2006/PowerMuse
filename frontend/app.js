@@ -353,7 +353,8 @@ const translations = {
     }
 };
 
-let currentLanguage = localStorage.getItem('language') || 'en';
+// Global language variable accessible to chatbot
+window.currentLanguage = localStorage.getItem('language') || 'en';
 let loadedTranslations = {};
 
 async function loadTranslations(lang) {
@@ -372,7 +373,8 @@ async function loadTranslations(lang) {
 }
 
 async function setLanguage(lang) {
-    currentLanguage = lang;
+    console.log(`[Language] Setting language to: ${lang}`);
+    window.currentLanguage = lang;
     localStorage.setItem('language', lang);
     
     // Load translations if not already loaded
@@ -381,6 +383,7 @@ async function setLanguage(lang) {
     }
     
     const langData = loadedTranslations[lang];
+    console.log(`[Language] Loaded translations for ${lang}:`, langData ? 'YES' : 'NO');
     
     // Update all elements with data-i18n attribute
     document.querySelectorAll('[data-i18n]').forEach(element => {
@@ -395,6 +398,26 @@ async function setLanguage(lang) {
         
         if (value) {
             element.textContent = value;
+        }
+    });
+    
+    // Update all elements with data-i18n-html attribute (for HTML content)
+    const htmlElements = document.querySelectorAll('[data-i18n-html]');
+    console.log(`[Language] Found ${htmlElements.length} elements with data-i18n-html`);
+    htmlElements.forEach(element => {
+        const key = element.getAttribute('data-i18n-html');
+        const keys = key.split('.');
+        let value = langData;
+        
+        for (const k of keys) {
+            value = value[k];
+            if (!value) break;
+        }
+        
+        console.log(`[Language] Translating ${key}: ${value ? 'FOUND' : 'NOT FOUND'}`);
+        if (value) {
+            element.innerHTML = value;
+            console.log(`[Language] Updated ${key} to: ${value.substring(0, 50)}...`);
         }
     });
     
@@ -1542,6 +1565,8 @@ class MusicChatbot {
         this.window.classList.add('active');
         this.isOpen = true;
         this.input.focus();
+        // Apply translations to chatbot content
+        setLanguage(window.currentLanguage);
         console.log('[Chatbot] Opened');
     }
     
@@ -1565,10 +1590,11 @@ class MusicChatbot {
         const typingIndicator = this.showTyping();
         
         try {
-            // Send to API
+            // Send to API with current language
             const formData = new FormData();
             formData.append('session_id', this.sessionId);
             formData.append('message', message);
+            formData.append('language', window.currentLanguage || 'en');
             
             const response = await fetch(`${this.API_URL}/api/chat`, {
                 method: 'POST',
@@ -2169,7 +2195,7 @@ function initializeLanguageSelector() {
         });
         
         // Set initial active state
-        if (option.getAttribute('data-lang') === currentLanguage) {
+        if (option.getAttribute('data-lang') === window.currentLanguage) {
             option.classList.add('active');
         }
     });
@@ -2183,13 +2209,13 @@ function initializeLanguageSelector() {
     });
     
     // Set initial language (async)
-    setLanguage(currentLanguage);
+    setLanguage(window.currentLanguage);
 }
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', async () => {
     // Load initial language first
-    await setLanguage(currentLanguage);
+    await setLanguage(window.currentLanguage);
     
     window.musicLab = new MusicLab();
     window.musicChatbot = new MusicChatbot();

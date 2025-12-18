@@ -20,6 +20,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy entire backend folder
 COPY backend/ ./
 
+# Copy music samples for Examples modal
+COPY music_samples/ ../music_samples/
+
 # Create uploads directory
 RUN mkdir -p /app/uploads
 

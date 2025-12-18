@@ -374,7 +374,7 @@
     </main>
 
     <!-- MusicNote Chatbot -->
-    <div id="chatbot-trigger" class="chatbot-trigger" title="Chat with MusicNote 🎵">
+    <div id="chatbot-trigger" class="chatbot-trigger" title="Chat with Rita 🎵">
         <svg viewBox="0 0 100 100" class="note-icon">
             <!-- Eighth note with face -->
             <ellipse cx="25" cy="85" rx="15" ry="10" fill="currentColor"/>
@@ -400,7 +400,7 @@
                     <path d="M 18 88 Q 25 91 32 88" stroke="white" stroke-width="1.5" fill="none" stroke-linecap="round"/>
                 </svg>
                 <div>
-                    <div class="chatbot-title">MusicNote</div>
+                    <div class="chatbot-title">Rita</div>
                     <div class="chatbot-subtitle">Your AI Music Assistant</div>
                 </div>
             </div>
@@ -408,9 +408,9 @@
         </div>
         
         <div id="chatbot-messages" class="chatbot-messages">
-            <div class="chat-message bot-message">
-                <div class="message-content">
-                    Hey there! 🎵 I'm MusicNote, your AI music assistant. I can help you with:
+            <div class="chat-message bot-message" id="chatbot-welcome-message">
+                <div class="message-content" data-i18n-html="chatbot.welcome">
+                    Hey there! 🎵 I'm Rita, your AI music assistant. I can help you with:
                     <br><br>
                     • Understanding how MusicLab works<br>
                     • Choosing the best patterns for fusion<br>

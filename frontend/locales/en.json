@@ -131,6 +131,9 @@
     "helpTrouble": "Troubleshooting any issues you encounter",
     "helpConversation": "MusicNote maintains conversation history throughout your session, so you can have a natural dialogue about your music creation process. The chatbot is knowledgeable, friendly, and always ready to assist you in making the most creative music possible!"
   },
+  "chatbot": {
+    "welcome": "Hey there! 🎵 I'm Rita, your AI music assistant. I can help you with:<br><br>• Understanding how MusicLab works<br>• Choosing the best patterns for fusion<br>• Music theory and production tips<br>• Technical questions about the model<br><br>What would you like to know?"
+  },
   "examples": {
     "title": "Music Generation Examples",
     "close": "Close",

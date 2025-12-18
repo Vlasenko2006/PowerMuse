@@ -130,8 +130,9 @@
     "helpInspiration": "Kreative Inspiration und Vorschläge für deine nächste Fusion",
     "helpTrouble": "Fehlerbehebung bei auftretenden Problemen",
     "helpConversation": "MusicNote behält den Gesprächsverlauf während deiner Sitzung bei, sodass du einen natürlichen Dialog über deinen Musikschaffungsprozess führen kannst. Der Chatbot ist sachkundig, freundlich und immer bereit, dir zu helfen, die kreativste Musik zu erstellen!"
-  },
-  "examples": {
+  },  "chatbot": {
+    "welcome": "Hallo! 🎵 Ich bin Rita, dein KI-Musikassistent. Ich kann dir helfen mit:<br><br>• Verständnis, wie MusicLab funktioniert<br>• Auswahl der besten Muster für die Fusion<br>• Musiktheorie und Produktionstipps<br>• Technischen Fragen zum Modell<br><br>Was möchtest du wissen?"
+  },  "examples": {
     "title": "Musik Generations Beispiele",
     "close": "Schließen",
     "sampleTitle": "Beispiel-Generationen",

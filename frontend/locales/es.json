@@ -130,8 +130,9 @@
     "helpInspiration": "Inspiración creativa y sugerencias para tu próxima fusión",
     "helpTrouble": "Solución de problemas que encuentres",
     "helpConversation": "MusicNote mantiene el historial de conversación durante tu sesión, para que puedas tener un diálogo natural sobre tu proceso de creación musical. ¡El chatbot es conocedor, amigable y siempre está listo para ayudarte a crear la música más creativa posible!"
-  },
-  "examples": {
+  },  "chatbot": {
+    "welcome": "¡Hola! 🎵 Soy Rita, tu asistente musical de IA. Puedo ayudarte con:<br><br>• Entender cómo funciona MusicLab<br>• Elegir los mejores patrones para fusión<br>• Teoría musical y consejos de producción<br>• Preguntas técnicas sobre el modelo<br><br>¿Qué te gustaría saber?"
+  },  "examples": {
     "title": "Ejemplos de Generación Musical",
     "close": "Cerrar",
     "sampleTitle": "Generaciones de Ejemplo",

@@ -130,8 +130,9 @@
     "helpInspiration": "创意灵感和下一次融合的建议",
     "helpTrouble": "解决您遇到的任何问题",
     "helpConversation": "MusicNote在整个会话中保持对话历史记录,因此您可以就音乐创作过程进行自然对话。聊天机器人知识渊博、友好,并始终准备帮助您创作最有创意的音乐!"
-  },
-  "examples": {
+  },  "chatbot": {
+    "welcome": "你好！🎵 我是Rita，您的AI音乐助手。我可以帮助您：<br><br>• 了解MusicLab的工作原理<br>• 选择最佳融合模式<br>• 音乐理论和制作技巧<br>• 关于模型的技术问题<br><br>您想了解什么？"
+  },  "examples": {
     "title": "音乐生成示例",
     "close": "关闭",
     "sampleTitle": "样本生成",
