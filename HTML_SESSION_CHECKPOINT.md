@@ -407,19 +407,260 @@ http://localhost:8080
 
 ---
 
-## 📦 Next Steps: Docker Deployment to AWS
+## Phase 9: AWS Deployment Session (December 19, 2025)
 
-**Planned Architecture:**
-- Frontend: nginx serving static files (port 80/443)
-- Backend: Python FastAPI (port 8001)
-- MLflow: Experiment tracking (port 5002)
+### Overview
+Complete deployment of MusicLab to AWS EC2 t3.micro instance with memory optimization, mobile responsiveness fixes, and domain configuration. Session involved infrastructure setup, deployment automation, frontend optimization, and comprehensive troubleshooting.
+
+### Deployment Infrastructure
+
+73. ✅ **AWS EC2 instance created** - t3.micro (1 vCPU, 1GB RAM), Instance ID: i-0ed8087de322eeff4, Region: eu-north-1 (Stockholm), Ubuntu 24.04.3 LTS
+74. ✅ **Security group configured** - sg-00bda0428fbaa9c5d with ports: 22 (SSH), 80 (HTTP), 8001 (Backend API), all from 0.0.0.0/0
+75. ✅ **SSH key configured** - sentiment-analysis-key.pem stored in ~/.ssh/ directory
+76. ✅ **4GB swap file created** - Using fallocate for memory management, configured vm.swappiness=10 for optimal performance
+77. ✅ **Initial IP assigned** - 51.20.58.15 (temporary, changes on instance restart)
+
+### Deployment Automation
+
+78. ✅ **deploy_to_aws.sh script created** - 141-line automated deployment script with comprehensive setup
+79. ✅ **Dynamic IP detection** - Script uses `aws ec2 describe-instances` to fetch current IP automatically
+80. ✅ **Swap setup automation** - 4GB swap file creation with proper permissions and swappiness configuration
+81. ✅ **Docker installation** - Automated Docker Engine installation (v29.1.3) with Docker Compose v2.x
+82. ✅ **Repository cloning** - Automated git clone from Vlasenko2006/PowerMuse main branch
+83. ✅ **Configuration transfer** - SCP transfers for .env (235 bytes), config_key.yaml (4.2KB)
+84. ✅ **Model checkpoint transfer** - 239MB best_model.pt transferred via SCP (~30 seconds)
+85. ✅ **Docker containers built** - Backend (powermuse-backend, 3.5GB, PyTorch CPU) and Frontend (powermuse-frontend, 88MB, nginx 1.29.4)
+
+### GitHub Repository Preparation
+
+86. ✅ **Music samples added** - Created music_samples/ directory with:
+   - input.wav (750KB) - Example input audio
+   - 1_noisy_target.wav (750KB) - Target with noise
+   - 1_predicted.wav (750KB) - Model prediction
+87. ✅ **Images added** - Created Images/ directory in frontend with:
+   - 1.png (1.0MB) - Interface screenshot
+   - 2.png (1.2MB) - Workflow visualization
+   - 3.png (934KB) - Feature showcase
+88. ✅ **Music samples committed** - Commit a9373b4 "Add music samples for examples modal"
+89. ✅ **Images committed** - Commit 71df3d2 "Add images to frontend for About modal"
+90. ✅ **AWS deployment guide created** - AWS_DEPLOYMENT.md (460 lines) with step-by-step instructions
+91. ✅ **API keys sanitized** - Removed exposed Groq API keys from documentation, replaced with placeholders
+92. ✅ **Force push after amend** - `git commit --amend` + `git push --force` to fix GitHub secret scanning blocks
+
+### Issue 1: Missing Music Samples
+
+93. ✅ **Problem identified** - Docker build failed: `"/music_samples": not found` during COPY command
+94. ✅ **Root cause** - Directory existed locally but wasn't committed to GitHub
+95. ✅ **Resolution** - `git add music_samples/ && git commit && git push origin main`
+
+### Issue 2: GitHub Secret Protection
+
+96. ✅ **Problem identified** - Push blocked: "Push cannot contain secrets - Groq API Key" at AWS_DEPLOYMENT.md:171, :186
+97. ✅ **Root cause** - Real API keys exposed in deployment documentation
+98. ✅ **Resolution** - Replaced with `your_groq_api_key_here`, `git commit --amend && git push --force`
+
+### Issue 3: Missing Model Checkpoint
+
+99. ✅ **Problem identified** - User asked "What about checkpoint that model uses?" - 239MB best_model.pt not in GitHub
+100. ✅ **Root cause** - Large files can't be committed to GitHub (100MB limit even with Git LFS)
+101. ✅ **Resolution** - Added SCP transfer to deployment script: `scp best_model.pt ubuntu@$EC2_IP:~/PowerMuse/backend/checkpoints/`
+102. ✅ **Transfer verified** - 239MB file transferred successfully in ~30 seconds
+
+### Issue 4: Security Group Port Configuration
+
+103. ✅ **Problem identified** - Browser timeout accessing http://51.20.58.15 - ports not open
+104. ✅ **Root cause** - Security group only had SSH port 22 configured
+105. ✅ **Resolution** - Added HTTP and API ports:
+   ```bash
+   aws ec2 authorize-security-group-ingress --group-id sg-00bda0428fbaa9c5d --protocol tcp --port 80 --cidr 0.0.0.0/0
+   aws ec2 authorize-security-group-ingress --group-id sg-00bda0428fbaa9c5d --protocol tcp --port 8001 --cidr 0.0.0.0/0
+   ```
+106. ✅ **Verification** - Application became accessible via browser
+
+### Issue 5: Hardcoded localhost URLs
+
+107. ✅ **Problem identified** - CORS errors: "Cross-Origin Request Blocked: http://localhost:8001/api/generate"
+108. ✅ **Root cause** - Frontend hardcoded to localhost API endpoints, doesn't work on remote server
+109. ✅ **Resolution** - Implemented dynamic hostname detection in frontend/app.js:
+   ```javascript
+   const hostname = window.location.hostname;
+   const apiUrl = hostname === 'localhost' ? 'http://localhost:8001' : `http://${hostname}:8001`;
+   ```
+110. ✅ **Fixed locations** - 5 API call sites updated:
+   - callGenerationAPI() - music generation endpoint
+   - pollGenerationStatus() - status polling
+   - loadGeneratedAudio() - audio download
+   - MusicChatbot.constructor() - chatbot API
+   - loadAllExamples() - examples endpoint
+111. ✅ **Commit** - 2a77a59 "Fix API URLs: Use dynamic hostname instead of hardcoded localhost"
+
+### Issue 6: Chatbot Language Support
+
+112. ✅ **Problem identified** - Rita chatbot responding in English regardless of selected UI language
+113. ✅ **Root cause 1** - Frontend not sending language parameter to backend API
+114. ✅ **Resolution 1** - Added `formData.append('language', currentLanguage)` in sendMessage() method
+115. ✅ **Problem identified** - Welcome message in chatbot window not translating
+116. ✅ **Root cause 2** - setLanguage() only handled `data-i18n` attributes, not `data-i18n-html`
+117. ✅ **Resolution 2** - Added HTML translation support:
+   ```javascript
+   document.querySelectorAll('[data-i18n-html]').forEach(element => {
+     const key = element.getAttribute('data-i18n-html');
+     if (translations[currentLanguage] && translations[currentLanguage][key]) {
+       element.innerHTML = translations[currentLanguage][key];
+     }
+   });
+   ```
+118. ✅ **Commit** - 97fb79d "Fix chatbot language support: Send currentLanguage parameter and handle data-i18n-html"
+119. ✅ **Verification** - Rita now responds in all 8 supported languages (EN/DE/RU/FR/ES/PT/AR/ZH)
+
+### Issue 7: Mobile Layout Problems
+
+120. ✅ **Problem identified** - User reported: "The header and chatbot are far away and do not feet the screen"
+121. ✅ **Root cause** - Desktop-optimized CSS with large sizes and spacing for high-resolution phone screens
+122. ✅ **First iteration** - Applied initial mobile optimizations:
+   - Header padding reduced to 0.8rem
+   - Logo text size 1.2rem
+   - Navigation font 0.85rem
+   - Chatbot button 56px with 15px margins
+123. ✅ **Problem persisted** - User still couldn't see header and chatbot without scrolling
+124. ✅ **Second iteration** - Ultra-compact mobile styles (@media max-width 768px):
+   - Header padding: 0.5rem
+   - Logo text: 1rem (down from 1.2rem)
+   - Logo icon: 24px (down from 30px)
+   - Navigation: 0.75rem (down from 0.85rem)
+   - Element gaps: 0.3rem (down from 0.5rem)
+   - Chatbot button: 50px (down from 56px)
+   - Chatbot margins: 10px (down from 15px)
+   - Added `white-space: nowrap` to prevent text wrapping
+125. ✅ **Commit** - 6d37790 "Aggressive mobile optimization: ultra-compact header and chatbot"
+126. ✅ **Verification** - Interface now fits on high-resolution phone screens without scrolling
+
+### DuckDNS Domain Configuration
+
+127. ✅ **User request** - "I want to make a duckdns, say http://musiclab.duckdns.org"
+128. ✅ **Domain registered** - musiclab.duckdns.org configured via DuckDNS web interface
+129. ✅ **DNS A record** - Pointed to 51.20.58.15 (current EC2 IP)
+130. ✅ **Propagation verified** - Domain resolves correctly to AWS instance
+131. ✅ **Application tested** - MusicLab accessible via http://musiclab.duckdns.org
+132. ✅ **Note** - IP is temporary, changes on instance restart (would need Elastic IP for permanence)
+
+### Documentation
+
+133. ✅ **AWS_DEPLOYMENT.md created** - 460 lines covering:
+   - EC2 instance setup with security groups
+   - 4GB swap configuration for memory management
+   - Docker and Docker Compose installation
+   - Repository cloning and configuration
+   - Model checkpoint transfer via SCP
+   - Container building and running
+   - Troubleshooting common issues
+   - Cost analysis (~$5-7/month)
+134. ✅ **API keys sanitized** - Replaced real keys with placeholders before pushing
+135. ✅ **AWS_DEPLOYMENT_CHECKPOINT.md created** - 653 lines of comprehensive session documentation
+   - Complete timeline of all 6 deployment phases
+   - All 6 issues with root causes and resolutions
+   - Technical specifications and architecture
+   - Git history with 7 commits (a9373b4 → 32ec596)
+   - Command reference with all terminal commands used
+   - Cost analysis and optimization suggestions
+
+### Git History (7 Commits)
+
+136. ✅ **a9373b4** - "Add music samples for examples modal" (3 WAV files)
+137. ✅ **71df3d2** - "Add images to frontend for About modal" (3 PNG files)
+138. ✅ **2a77a59** - "Fix API URLs: Use dynamic hostname instead of hardcoded localhost"
+139. ✅ **97fb79d** - "Fix chatbot language support: Send currentLanguage parameter and handle data-i18n-html"
+140. ✅ **6d37790** - "Aggressive mobile optimization: ultra-compact header and chatbot"
+141. ✅ **7c2bd51** - "Add comprehensive AWS deployment guide"
+142. ✅ **32ec596** - "Add comprehensive AWS deployment checkpoint documentation"
+
+### Deployment Verification
+
+143. ✅ **Backend functional** - SimpleTransformer model (15.4M params) loaded successfully
+144. ✅ **Music generation tested** - Successfully generated audio from user input
+145. ✅ **Chatbot tested** - Rita responding correctly in all 8 languages
+146. ✅ **Examples modal tested** - All 3 audio samples playing correctly
+147. ✅ **About modal tested** - All 3 interface images displaying
+148. ✅ **Mobile layout tested** - Interface fits on high-resolution phone screens
+149. ✅ **Domain access tested** - Application accessible via musiclab.duckdns.org
+150. ✅ **IP access tested** - Application accessible via 51.20.58.15
+
+### Technical Specifications
+
+**AWS Infrastructure:**
+- Instance: t3.micro, 1 vCPU, 1GB RAM + 4GB swap
+- Region: eu-north-1 (Stockholm)
+- OS: Ubuntu 24.04.3 LTS
+- Storage: 8GB root volume
+- Cost: ~$5-7/month (~$0.0104/hour)
+
+**Docker Containers:**
+- Backend: 3.5GB image (PyTorch CPU-only), port 8001
+- Frontend: 88MB image (nginx 1.29.4), port 80
+- Model: SimpleTransformer, 239MB checkpoint, 15.4M parameters
+
+**Network Configuration:**
+- Security Group: sg-00bda0428fbaa9c5d
+- Ports: 22 (SSH), 80 (HTTP), 8001 (Backend API)
+- Domain: musiclab.duckdns.org → 51.20.58.15
+- Access: Public internet (0.0.0.0/0)
+
+**Performance Optimization:**
+- 4GB swap file for model loading (239MB checkpoint)
+- vm.swappiness=10 to minimize swap usage
+- CPU-only PyTorch build (no GPU on t3.micro)
+- nginx serving static frontend assets
+- Docker layer caching for faster rebuilds
+
+### Current Status (Commit: 32ec596)
+
+✅ **Complete:** AWS EC2 deployment operational  
+✅ **Complete:** Domain configured (musiclab.duckdns.org)  
+✅ **Complete:** Mobile optimization for high-resolution screens  
+✅ **Complete:** Chatbot multilingual support (8 languages)  
+✅ **Complete:** All frontend API URLs dynamic  
+✅ **Complete:** Security group properly configured  
+✅ **Complete:** Model checkpoint transferred via SCP  
+✅ **Complete:** Music samples and images on GitHub  
+✅ **Complete:** Comprehensive deployment documentation  
+
+### Known Limitations
+
+- **Temporary IP:** 51.20.58.15 changes on instance restart (consider Elastic IP for $3.60/month)
+- **No SSL:** HTTP only, no HTTPS certificate (consider Let's Encrypt)
+- **Manual DuckDNS updates:** No automatic IP update on instance restart (consider cron job)
+- **t3.micro constraints:** 1GB RAM requires swap, slower than larger instances
+- **CPU-only inference:** ~30-40 seconds per generation (GPU would be ~2-5 seconds)
+
+### Future Improvements
+
+- Set up automatic DuckDNS IP updates (cron job on EC2)
+- Add SSL certificate with Let's Encrypt/Certbot
+- Purchase Elastic IP for permanent address ($3.60/month)
+- Consider t3.small upgrade for better performance ($14.60/month)
+- Implement CloudWatch monitoring for uptime alerts
+- Set up automated backups for model checkpoints and configurations
+
+---
+
+## 📦 Docker Deployment Status
+
+**✅ Completed AWS Architecture:**
+- Frontend: nginx serving static files (port 80)
+- Backend: Python FastAPI with SimpleTransformer (port 8001)
 - Docker Compose orchestration
-- AWS EC2 deployment
+- AWS EC2 t3.micro instance
+- Public domain: musiclab.duckdns.org
 
 **Next potential adjustments:**
-- Dockerize frontend with nginx
-- Dockerize backend with uvicorn
-- Create docker-compose.yml
-- Configure environment variables
-- Set up AWS EC2 instance
-- Deploy with CI/CD pipeline
+- SSL certificate setup with Let's Encrypt
+- Elastic IP for permanent address
+- Automated DuckDNS IP updates
+- CloudWatch monitoring and alerts
+- Backup automation for model and configs
+
+---
+
+**Last Updated:** December 19, 2025  
+**Current Commit:** 32ec596  
+**Deployment Status:** ✅ Live on AWS at musiclab.duckdns.org
