@@ -398,6 +398,23 @@ async function setLanguage(lang) {
         }
     });
     
+    // Update all elements with data-i18n-html attribute (for HTML content like chatbot welcome)
+    document.querySelectorAll('[data-i18n-html]').forEach(element => {
+        const key = element.getAttribute('data-i18n-html');
+        const keys = key.split('.');
+        let value = langData;
+        
+        for (const k of keys) {
+            value = value[k];
+            if (!value) break;
+        }
+        
+        if (value) {
+            element.innerHTML = value;
+            console.log(`[Language] Updated ${key} to: ${value.substring(0, 50)}...`);
+        }
+    });
+    
     // Update language button
     const langMap = { 
         en: 'EN', de: 'DE', ru: 'RU', fr: 'FR', 
