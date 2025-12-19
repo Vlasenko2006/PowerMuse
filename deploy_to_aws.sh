@@ -82,11 +82,16 @@ ssh -i "$SSH_KEY" ubuntu@$EC2_IP << 'ENDSSH'
     fi
 ENDSSH
 
-# Copy environment files
+# Copy environment files and model checkpoint
 echo ""
-echo "5. Configuring environment..."
+echo "5. Configuring environment and copying model checkpoint..."
 scp -i "$SSH_KEY" .env ubuntu@$EC2_IP:~/PowerMuse/.env
 scp -i "$SSH_KEY" backend/config/config_key.yaml ubuntu@$EC2_IP:~/PowerMuse/backend/config/config_key.yaml
+
+# Copy model checkpoint (239MB - this will take ~30 seconds)
+echo "   Copying model checkpoint (239MB)..."
+ssh -i "$SSH_KEY" ubuntu@$EC2_IP "mkdir -p ~/PowerMuse/backend/checkpoints"
+scp -i "$SSH_KEY" backend/checkpoints/best_model.pt ubuntu@$EC2_IP:~/PowerMuse/backend/checkpoints/best_model.pt
 
 # Build and start containers
 echo ""
