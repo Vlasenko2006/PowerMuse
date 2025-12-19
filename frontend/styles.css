@@ -1941,4 +1941,63 @@ body {
     .example-controls .volume-control {
         display: none;
     }
+    
+    /* Mobile header optimization - make more compact */
+    .header-content {
+        padding: var(--spacing-sm) 0;
+        flex-wrap: wrap;
+        gap: var(--spacing-sm);
+    }
+    
+    .logo {
+        font-size: 1.2rem;
+        gap: var(--spacing-sm);
+    }
+    
+    .logo-icon {
+        width: 30px;
+        height: 30px;
+    }
+    
+    .nav {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        font-size: 0.85rem;
+    }
+    
+    .nav-link {
+        padding: var(--spacing-xs) var(--spacing-sm);
+    }
+    
+    .language-selector {
+        margin-left: 0;
+    }
+    
+    .lang-btn {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        font-size: 0.85rem;
+    }
+    
+    /* Chatbot positioning for mobile - more centered and accessible */
+    .chatbot-trigger {
+        width: 56px;
+        height: 56px;
+        bottom: 15px;
+        right: 15px;
+    }
+    
+    .chatbot-trigger .note-icon {
+        width: 28px;
+        height: 28px;
+    }
+    
+    .chatbot-window {
+        bottom: 80px;
+        right: 15px;
+        left: 15px;
+        width: auto;
+        height: 70vh;
+        max-height: 500px;
+    }
 }
