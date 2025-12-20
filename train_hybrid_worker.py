@@ -667,14 +667,14 @@ def worker_main(rank, world_size, args):
         print(f"Loading dataset from {args.dataset_dir}...")
     
     train_dataset = AudioPairsDataset24sec(
-        data_dir=args.dataset_dir,
+        data_folder=args.dataset_dir,
         split='train',
-        sample_rate=24000
+        target_sr=args.encodec_sr
     )
     val_dataset = AudioPairsDataset24sec(
-        data_dir=args.dataset_dir,
+        data_folder=args.dataset_dir,
         split='val',
-        sample_rate=24000
+        target_sr=args.encodec_sr
     )
     
     train_sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank, shuffle=True)
