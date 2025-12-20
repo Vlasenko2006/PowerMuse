@@ -18,8 +18,7 @@ mkdir -p logs
 mkdir -p checkpoints_adaptive
 
 # Activate environment
-source /work/gg0302/g260141/miniforge3/bin/activate
-conda activate /work/gg0302/g260141/conda/powermusic
+source /work/gg0302/g260141/Jingle/multipattern_env/bin/activate
 
 echo ""
 echo "Environment:"
@@ -118,7 +117,7 @@ python train_adaptive_ddp.py \
     --dataset_folder dataset_pairs_wav_24sec \
     --batch_size 6 \
     --num_workers 8 \
-    --epochs 50 \
+    --epochs 250 \
     --lr 1e-4 \
     --weight_decay 0.01 \
     --checkpoint_dir checkpoints_adaptive \
@@ -127,22 +126,22 @@ python train_adaptive_ddp.py \
     --encoding_dim 128 \
     --nhead 8 \
     --num_layers 6 \
-    --num_transformer_layers 3 \
+    --num_transformer_layers 2 \
     --dropout 0.1 \
     --encodec_bandwidth 6.0 \
     --encodec_sr 24000 \
     --use_compositional_agent true \
     --mask_reg_weight 0.1 \
-    --balance_loss_weight 25.0 \
+    --balance_loss_weight 15.0 \
     --corr_weight 0.5 \
     --loss_weight_spectral 0.01 \
-    --loss_weight_target 0.00 \
-    --loss_weight_input 0.00 \
-    --gan_weight 0.01 \
+    --loss_weight_target 0.3 \
+    --loss_weight_input 0.3 \
+    --gan_weight 0.1 \
     --disc_lr 5e-5 \
     --disc_update_freq 1 \
     --shuffle_targets true \
-    --anti_cheating 0.0 \
+    --anti_cheating 0.2 \
     --save_every 1 \
     --patience 50 \
     --seed 42 \
