@@ -131,8 +131,9 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
         # Compute mean novelty loss
         mean_novelty_loss = torch.mean(torch.stack(losses))
         
-        # Decode first output for RMS/correlation analysis
-        output_audio = encodec_model.decoder(outputs[0])  # [B, 1, samples]
+        # Decode first output for RMS/correlation analysis (detach to prevent gradients through frozen EnCodec)
+        with torch.no_grad():
+            output_audio = encodec_model.decoder(outputs[0].detach())  # [B, 1, samples]
         target_window_audio = audio_targets[:, :, :output_audio.size(2)]  # Match length
         input_window_audio = audio_inputs[:, :, :output_audio.size(2)]
         
@@ -395,14 +396,14 @@ def validate(model, dataloader, encodec_model, rank, world_size, args):
             
             # Store first sample for visualization (use first output pair)
             if first_input_audio is None and rank == 0 and len(outputs) > 0:
-                # Decode to get audio waveforms
-                output_audio = encodec_model.decoder(outputs[0][:1])  # First sample, first pair [1, 1, samples]
+                # Decode to get audio waveforms (decoder already has no_grad from validation context)
+                output_audio_viz = encodec_model.decoder(outputs[0][:1])  # First sample, first pair [1, 1, samples]
                 input_audio = audio_inputs[:1]  # [1, 1, samples]
                 target_audio = audio_targets[:1]  # [1, 1, samples]
                 
                 first_input_audio = input_audio[0, 0].cpu()  # [samples]
                 first_target_audio = target_audio[0, 0].cpu()
-                first_output_audio = output_audio[0, 0].cpu()
+                first_output_audio = output_audio_viz[0, 0].cpu()
                 
                 # Compute correlations for this sample
                 import numpy as np
