@@ -97,11 +97,13 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
     
     # Only show progress bar on rank 0
     if rank == 0:
-        pbar = tqdm(dataloader, desc=f"Epoch {epoch}", ncols=140, 
-                   file=sys.stdout, dynamic_ncols=False, 
-                   leave=True, position=0, mininterval=1.0)
+        # Disable tqdm when output is redirected through tee - causes multiline issues
+        # Use manual progress updates instead
+        pbar = dataloader
+        total_batches = len(dataloader)
     else:
         pbar = dataloader
+        total_batches = 0
     
     for batch_idx, (audio_inputs, audio_targets) in enumerate(pbar):
         # Move to device
@@ -361,11 +363,12 @@ def validate(model, dataloader, encodec_model, rank, world_size, args):
     
     with torch.no_grad():
         if rank == 0:
-            pbar = tqdm(dataloader, desc="Validation", ncols=120, 
-                       file=sys.stdout, dynamic_ncols=False,
-                       leave=True, position=0, mininterval=1.0)
+            # Disable tqdm in validation too
+            pbar = dataloader
+            total_batches = len(dataloader)
         else:
             pbar = dataloader
+            total_batches = 0
         
         for batch_idx, (audio_inputs, audio_targets) in enumerate(pbar):
             audio_inputs = audio_inputs.cuda(rank)
@@ -435,14 +438,13 @@ def validate(model, dataloader, encodec_model, rank, world_size, args):
             num_batches += 1
             
             if rank == 0:
-                postfix = {
-                    'loss': f'{loss.item():.4f}',
-                    'rms_in': f'{rms_input_val.item() if isinstance(rms_input_val, torch.Tensor) else rms_input_val:.4f}',
-                    'rms_tgt': f'{rms_target_val.item() if isinstance(rms_target_val, torch.Tensor) else rms_target_val:.4f}'
-                }
-                if args.loss_weight_spectral > 0:
-                    postfix['spectral'] = f'{spectral_loss_value:.4f}'
-                pbar.set_postfix(postfix)
+                # Manual progress update every 10 batches
+                if batch_idx % 10 == 0 or batch_idx == total_batches - 1:
+                    progress_pct = (batch_idx + 1) / total_batches * 100
+                    print(f"Validation: {batch_idx+1}/{total_batches} ({progress_pct:.0f}%) - "
+                          f"loss={loss.item():.4f}, "
+                          f"rms_in={rms_input_val.item() if isinstance(rms_input_val, torch.Tensor) else rms_input_val:.4f}, "
+                          f"rms_tgt={rms_target_val.item() if isinstance(rms_target_val, torch.Tensor) else rms_target_val:.4f}")
     
     # Display waveform visualization on rank 0
     if rank == 0 and first_input_audio is not None:
@@ -646,7 +648,8 @@ def train_adaptive_worker(rank, world_size, args):
             if args.corr_weight > 0:
                 print(f"     Correlation Penalty: {train_corr_penalty:.4f} (weight: {args.corr_weight})")
             
-            # Component weights if available\n            if train_component_stats:
+            # Component weights if available
+            if train_component_stats is not None:
                 print(f"\n  🎼 Compositional Agent (Component Weights):")
                 print(f"     Input:  rhythm={train_component_stats['input_rhythm']:.3f}, harmony={train_component_stats['input_harmony']:.3f}")
                 print(f"     Target: rhythm={train_component_stats['target_rhythm']:.3f}, harmony={train_component_stats['target_harmony']:.3f}")
