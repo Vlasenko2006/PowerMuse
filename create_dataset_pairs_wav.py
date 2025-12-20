@@ -24,11 +24,11 @@ import random
 def create_pairs_dataset(
     input_folder="output",
     output_folder="dataset_pairs_wav",
-    segment_duration=16.0,  # Duration in seconds
+    segment_duration=24.0,  # Duration in seconds (24 for adaptive window selection)
     target_sr=24000,
     train_split=0.9,
     max_pairs_per_song=10,
-    max_total_pairs=2000
+    max_total_pairs=8000
 ):
     """
     Create dataset of audio segment pairs in WAV format.
@@ -195,20 +195,21 @@ def create_pairs_dataset(
     print(f"  Train: {len(train_pairs)} pairs in {train_folder}/")
     print(f"  Val: {len(val_pairs)} pairs in {val_folder}/")
     print(f"\nEach pair consists of:")
-    print(f"  - pair_XXXX_input.wav: segment [0-16sec]")
-    print(f"  - pair_XXXX_output.wav: segment [16-32sec]")
+    print(f"  - pair_XXXX_input.wav: segment [0-24sec]")
+    print(f"  - pair_XXXX_output.wav: segment [24-48sec]")
     print(f"\nAll files are stereo WAV at {target_sr} Hz")
+    print(f"Note: 24-second segments for adaptive window selection")
     print("="*80 + "\n")
 
 
 if __name__ == "__main__":
-    # Default configuration
+    # Default configuration for adaptive window selection (24-second segments)
     create_pairs_dataset(
         input_folder="output",
-        output_folder="dataset_pairs_wav",
-        segment_duration=16.0,
+        output_folder="dataset_pairs_wav_24sec",
+        segment_duration=24.0,  # 24 seconds for adaptive window selection
         target_sr=24000,
         train_split=0.9,
         max_pairs_per_song=10,
-        max_total_pairs=2000
+        max_total_pairs=8000
     )
