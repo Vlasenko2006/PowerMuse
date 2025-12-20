@@ -18,6 +18,7 @@ import time
 # Import custom modules
 from dataset_wav_pairs_24sec import AudioPairsDataset24sec, collate_fn
 from adaptive_window_agent import AdaptiveWindowCreativeAgent
+from training.losses import rms_loss, combined_loss
 
 
 def setup_ddp(rank, world_size):
@@ -67,6 +68,9 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
     total_loss = 0.0
     total_novelty = 0.0
     total_spectral = 0.0
+    total_rms_input = 0.0
+    total_rms_target = 0.0
+    total_corr_penalty = 0.0
     num_batches = 0
     
     # Track window selection statistics
@@ -79,6 +83,12 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
     total_pair0_tonality = 0.0
     total_pair1_tonality = 0.0
     total_pair2_tonality = 0.0
+    
+    # Track compositional agent component weights
+    total_input_rhythm_w = 0.0
+    total_input_harmony_w = 0.0
+    total_target_rhythm_w = 0.0
+    total_target_harmony_w = 0.0
     
     # Only show progress bar on rank 0
     if rank == 0:
@@ -117,17 +127,22 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
         # Compute mean novelty loss
         mean_novelty_loss = torch.mean(torch.stack(losses))
         
-        # Total loss
-        loss = args.mask_reg_weight * mean_novelty_loss
-        spectral_loss_value = 0.0
+        # Decode first output for RMS/correlation analysis
+        output_audio = encodec_model.decoder(outputs[0])  # [B, 1, samples]
+        target_window_audio = audio_targets[:, :, :output_audio.size(2)]  # Match length
+        input_window_audio = audio_inputs[:, :, :output_audio.size(2)]
         
-        # Add spectral loss if requested
-        if args.loss_weight_spectral > 0:
-            # Simple MSE on outputs as spectral proxy
-            spectral_loss = sum([torch.nn.functional.mse_loss(out, encoded_targets[:, :, :800]) 
-                                for out in outputs]) / len(outputs)
-            spectral_loss_value = spectral_loss.item()
-            loss = loss + args.loss_weight_spectral * spectral_loss
+        # Compute RMS losses and correlation penalty
+        base_loss, rms_input_val, rms_target_val, spec_val, mel_val, corr_penalty_val = combined_loss(
+            output_audio, input_window_audio, target_window_audio,
+            args.loss_weight_input, args.loss_weight_target,
+            args.loss_weight_spectral, args.loss_weight_mel,
+            weight_correlation=args.corr_weight
+        )
+        
+        # Total loss: RMS + novelty + spectral + correlation
+        loss = base_loss + args.mask_reg_weight * mean_novelty_loss
+        spectral_loss_value = spec_val.item() if isinstance(spec_val, torch.Tensor) else spec_val
         
         # Backward
         optimizer.zero_grad()
@@ -174,7 +189,17 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
         total_loss += loss.item()
         total_novelty += mean_novelty_loss.item()
         total_spectral += spectral_loss_value
+        total_rms_input += rms_input_val.item() if isinstance(rms_input_val, torch.Tensor) else rms_input_val
+        total_rms_target += rms_target_val.item() if isinstance(rms_target_val, torch.Tensor) else rms_target_val
+        total_corr_penalty += corr_penalty_val.item() if isinstance(corr_penalty_val, torch.Tensor) else corr_penalty_val
         num_batches += 1
+        
+        # Extract component weights if available
+        if hasattr(model.module.creative_agent, 'input_rhythm_weight'):
+            total_input_rhythm_w += model.module.creative_agent.input_rhythm_weight
+            total_input_harmony_w += model.module.creative_agent.input_harmony_weight
+            total_target_rhythm_w += model.module.creative_agent.target_rhythm_weight
+            total_target_harmony_w += model.module.creative_agent.target_harmony_weight
         
         # Track window selection statistics
         if 'pairs' in metadata and len(metadata['pairs']) >= 3:
@@ -217,14 +242,23 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
     avg_loss_tensor = torch.tensor([total_loss / num_batches], device=rank)
     avg_novelty_tensor = torch.tensor([total_novelty / num_batches], device=rank)
     avg_spectral_tensor = torch.tensor([total_spectral / num_batches], device=rank)
+    avg_rms_input_tensor = torch.tensor([total_rms_input / num_batches], device=rank)
+    avg_rms_target_tensor = torch.tensor([total_rms_target / num_batches], device=rank)
+    avg_corr_penalty_tensor = torch.tensor([total_corr_penalty / num_batches], device=rank)
     
     dist.all_reduce(avg_loss_tensor, op=dist.ReduceOp.SUM)
     dist.all_reduce(avg_novelty_tensor, op=dist.ReduceOp.SUM)
     dist.all_reduce(avg_spectral_tensor, op=dist.ReduceOp.SUM)
+    dist.all_reduce(avg_rms_input_tensor, op=dist.ReduceOp.SUM)
+    dist.all_reduce(avg_rms_target_tensor, op=dist.ReduceOp.SUM)
+    dist.all_reduce(avg_corr_penalty_tensor, op=dist.ReduceOp.SUM)
     
     avg_loss = avg_loss_tensor.item() / world_size
     avg_novelty = avg_novelty_tensor.item() / world_size
     avg_spectral = avg_spectral_tensor.item() / world_size
+    avg_rms_input = avg_rms_input_tensor.item() / world_size
+    avg_rms_target = avg_rms_target_tensor.item() / world_size
+    avg_corr_penalty = avg_corr_penalty_tensor.item() / world_size
     
     # Compute window statistics
     window_stats = None
@@ -241,7 +275,17 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
             'pair2_tonality': total_pair2_tonality / num_batches,
         }
     
-    return avg_loss, avg_novelty, avg_spectral, window_stats
+    # Component weights (if available)
+    component_stats = None
+    if num_batches > 0 and total_input_rhythm_w > 0:
+        component_stats = {
+            'input_rhythm': total_input_rhythm_w / num_batches,
+            'input_harmony': total_input_harmony_w / num_batches,
+            'target_rhythm': total_target_rhythm_w / num_batches,
+            'target_harmony': total_target_harmony_w / num_batches,
+        }
+    
+    return avg_loss, avg_novelty, avg_spectral, avg_rms_input, avg_rms_target, avg_corr_penalty, window_stats, component_stats
 
 
 def _create_waveform_visualization(audio, label, num_segments=50):
@@ -296,6 +340,8 @@ def validate(model, dataloader, encodec_model, rank, world_size, args):
     total_loss = 0.0
     total_novelty = 0.0
     total_spectral = 0.0
+    total_rms_input = 0.0
+    total_rms_target = 0.0
     num_batches = 0
     
     # Store first batch samples for waveform visualization
@@ -327,14 +373,21 @@ def validate(model, dataloader, encodec_model, rank, world_size, args):
             outputs, losses, metadata = model(encoded_inputs, encoded_targets)
             mean_novelty_loss = torch.mean(torch.stack(losses))
             
-            loss = args.mask_reg_weight * mean_novelty_loss
-            spectral_loss_value = 0.0
+            # Decode for RMS analysis
+            output_audio = encodec_model.decoder(outputs[0])  # [B, 1, samples]
+            target_window_audio = audio_targets[:, :, :output_audio.size(2)]
+            input_window_audio = audio_inputs[:, :, :output_audio.size(2)]
             
-            if args.loss_weight_spectral > 0:
-                spectral_loss = sum([torch.nn.functional.mse_loss(out, encoded_targets[:, :, :800]) 
-                                    for out in outputs]) / len(outputs)
-                spectral_loss_value = spectral_loss.item()
-                loss = loss + args.loss_weight_spectral * spectral_loss
+            # Compute losses
+            base_loss, rms_input_val, rms_target_val, spec_val, mel_val, corr_val = combined_loss(
+                output_audio, input_window_audio, target_window_audio,
+                args.loss_weight_input, args.loss_weight_target,
+                args.loss_weight_spectral, args.loss_weight_mel,
+                weight_correlation=args.corr_weight
+            )
+            
+            loss = base_loss + args.mask_reg_weight * mean_novelty_loss
+            spectral_loss_value = spec_val.item() if isinstance(spec_val, torch.Tensor) else spec_val
             
             # Store first sample for visualization (use first output pair)
             if first_input_audio is None and rank == 0 and len(outputs) > 0:
@@ -367,12 +420,15 @@ def validate(model, dataloader, encodec_model, rank, world_size, args):
             total_loss += loss.item()
             total_novelty += mean_novelty_loss.item()
             total_spectral += spectral_loss_value
+            total_rms_input += rms_input_val.item() if isinstance(rms_input_val, torch.Tensor) else rms_input_val
+            total_rms_target += rms_target_val.item() if isinstance(rms_target_val, torch.Tensor) else rms_target_val
             num_batches += 1
             
             if rank == 0:
                 postfix = {
                     'loss': f'{loss.item():.4f}',
-                    'novelty': f'{mean_novelty_loss.item():.4f}'
+                    'rms_in': f'{rms_input_val.item() if isinstance(rms_input_val, torch.Tensor) else rms_input_val:.4f}',
+                    'rms_tgt': f'{rms_target_val.item() if isinstance(rms_target_val, torch.Tensor) else rms_target_val:.4f}'
                 }
                 if args.loss_weight_spectral > 0:
                     postfix['spectral'] = f'{spectral_loss_value:.4f}'
@@ -412,16 +468,22 @@ def validate(model, dataloader, encodec_model, rank, world_size, args):
     avg_loss_tensor = torch.tensor([total_loss / num_batches], device=rank)
     avg_novelty_tensor = torch.tensor([total_novelty / num_batches], device=rank)
     avg_spectral_tensor = torch.tensor([total_spectral / num_batches], device=rank)
+    avg_rms_input_tensor = torch.tensor([total_rms_input / num_batches], device=rank)
+    avg_rms_target_tensor = torch.tensor([total_rms_target / num_batches], device=rank)
     
     dist.all_reduce(avg_loss_tensor, op=dist.ReduceOp.SUM)
     dist.all_reduce(avg_novelty_tensor, op=dist.ReduceOp.SUM)
     dist.all_reduce(avg_spectral_tensor, op=dist.ReduceOp.SUM)
+    dist.all_reduce(avg_rms_input_tensor, op=dist.ReduceOp.SUM)
+    dist.all_reduce(avg_rms_target_tensor, op=dist.ReduceOp.SUM)
     
     avg_loss = avg_loss_tensor.item() / world_size
+    avg_rms_input = avg_rms_input_tensor.item() / world_size
+    avg_rms_target = avg_rms_target_tensor.item() / world_size
     avg_novelty = avg_novelty_tensor.item() / world_size
     avg_spectral = avg_spectral_tensor.item() / world_size
     
-    return avg_loss, avg_novelty, avg_spectral
+    return avg_loss, avg_novelty, avg_spectral, avg_rms_input, avg_rms_target
 
 
 def train_adaptive_worker(rank, world_size, args):
@@ -548,13 +610,14 @@ def train_adaptive_worker(rank, world_size, args):
         train_sampler.set_epoch(epoch)
         
         # Train
-        train_loss, train_novelty, train_spectral, train_window_stats = train_epoch(
+        (train_loss, train_novelty, train_spectral, train_rms_input, train_rms_target, 
+         train_corr_penalty, train_window_stats, train_component_stats) = train_epoch(
             model, train_loader, encodec_model, optimizer,
             rank, world_size, args, epoch
         )
         
         # Validate
-        val_loss, val_novelty, val_spectral = validate(
+        val_loss, val_novelty, val_spectral, val_rms_input, val_rms_target = validate(
             model, val_loader, encodec_model, rank, world_size, args
         )
         
@@ -565,9 +628,18 @@ def train_adaptive_worker(rank, world_size, args):
             print(f"{'='*80}")
             print(f"  📊 Train Metrics:")
             print(f"     Total Loss:    {train_loss:.4f}")
+            print(f"     RMS Input:     {train_rms_input:.4f} (weight: {args.loss_weight_input})")
+            print(f"     RMS Target:    {train_rms_target:.4f} (weight: {args.loss_weight_target})")
             print(f"     Novelty Loss:  {train_novelty:.4f} (weight: {args.mask_reg_weight})")
             if args.loss_weight_spectral > 0:
                 print(f"     Spectral Loss: {train_spectral:.4f} (weight: {args.loss_weight_spectral})")
+            if args.corr_weight > 0:
+                print(f"     Correlation Penalty: {train_corr_penalty:.4f} (weight: {args.corr_weight})")
+            
+            # Component weights if available\n            if train_component_stats:
+                print(f"\n  🎼 Compositional Agent (Component Weights):")
+                print(f"     Input:  rhythm={train_component_stats['input_rhythm']:.3f}, harmony={train_component_stats['input_harmony']:.3f}")
+                print(f"     Target: rhythm={train_component_stats['target_rhythm']:.3f}, harmony={train_component_stats['target_harmony']:.3f}")
             
             print(f"\n  🎯 Adaptive Window Selection (Training):")
             if train_window_stats:
@@ -597,6 +669,8 @@ def train_adaptive_worker(rank, world_size, args):
             
             print(f"\n  📈 Validation Metrics:")
             print(f"     Total Loss:    {val_loss:.4f}")
+            print(f"     RMS Input:     {val_rms_input:.4f}")
+            print(f"     RMS Target:    {val_rms_target:.4f}")
             print(f"     Novelty Loss:  {val_novelty:.4f}")
             if args.loss_weight_spectral > 0:
                 print(f"     Spectral Loss: {val_spectral:.4f}")
