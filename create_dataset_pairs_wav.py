@@ -203,13 +203,15 @@ def create_pairs_dataset(
 
 
 if __name__ == "__main__":
-    # Default configuration for adaptive window selection (24-second segments)
+    # Configuration for adaptive window selection (24-second segments)
+    # This creates pairs where each segment is 24 seconds long
+    # The AdaptiveWindowCreativeAgent will select 3x 16-second windows from each
     create_pairs_dataset(
         input_folder="output",
         output_folder="dataset_pairs_wav_24sec",
         segment_duration=24.0,  # 24 seconds for adaptive window selection
         target_sr=24000,
-        train_split=0.9,
+        train_split=0.95,
         max_pairs_per_song=10,
-        max_total_pairs=8000
+        max_total_pairs=8000  # ~5,375 expected from current dataset
     )
