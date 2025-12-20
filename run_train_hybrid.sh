@@ -123,20 +123,36 @@ echo ""
 stdbuf -oL -eL python train_hybrid_worker.py \
     --dataset_dir dataset_pairs_wav_24sec \
     --checkpoint_dir checkpoints_hybrid \
-    --epochs 250 \
     --batch_size 6 \
+    --num_workers 8 \
+    --epochs 250 \
     --learning_rate 1e-4 \
-    --loss_weight_input 0.3 \
-    --loss_weight_target 0.3 \
-    --loss_weight_spectral 0.01 \
-    --loss_weight_mel 0.01 \
-    --corr_weight 0.5 \
+    --weight_decay 0.01 \
+    --world_size 4 \
+    --num_pairs 3 \
+    --encoding_dim 128 \
+    --nhead 8 \
+    --num_layers 6 \
+    --num_transformer_layers 2 \
+    --dropout 0.1 \
+    --encodec_bandwidth 6.0 \
+    --encodec_sr 24000 \
+    --use_compositional_agent true \
     --mask_reg_weight 0.1 \
     --balance_loss_weight 15.0 \
+    --corr_weight 0.5 \
+    --loss_weight_spectral 0.01 \
+    --loss_weight_target 0.3 \
+    --loss_weight_input 0.3 \
+    --loss_weight_mel 0.01 \
     --gan_weight 0.1 \
+    --disc_lr 5e-5 \
     --disc_update_freq 1 \
     --shuffle_targets \
-    --world_size 4 \
+    --anti_cheating 0.2 \
+    --save_every 10 \
+    --patience 50 \
+    --seed 42 \
     2>&1 | tee logs/hybrid_train_$(date +%Y%m%d_%H%M%S).log
 
 EXIT_CODE=$?

@@ -58,7 +58,10 @@ def cleanup_ddp():
 
 def load_encodec_model(bandwidth=6.0, sample_rate=24000, device='cuda'):
     """Load and freeze EnCodec model"""
-    model = EncodecModel.encodec_model_24khz()
+    if sample_rate == 24000:
+        model = EncodecModel.encodec_model_24khz()
+    else:
+        raise ValueError(f"Unsupported sample rate: {sample_rate}")
     model.set_target_bandwidth(bandwidth)
     model = model.to(device)
     model.train()  # Keep in train mode but freeze parameters
@@ -587,12 +590,22 @@ def worker_main(rank, world_size, args):
     """Main worker function"""
     print(f"[Rank {rank}] Starting worker...")
     
+    # Set seed for reproducibility
+    torch.manual_seed(args.seed + rank)
+    torch.cuda.manual_seed(args.seed + rank)
+    import numpy as np
+    np.random.seed(args.seed + rank)
+    
     # Setup
     setup_ddp(rank, world_size)
     torch.cuda.set_device(rank)
     
     # Load EnCodec
-    encodec_model = load_encodec_model(device=rank)
+    encodec_model = load_encodec_model(
+        bandwidth=args.encodec_bandwidth,
+        sample_rate=args.encodec_sr,
+        device=rank
+    )
     
     # Create adaptive window agent model
     if rank == 0:
@@ -606,7 +619,10 @@ def worker_main(rank, world_size, args):
         print(f"    - Compositional agent (rhythm/harmony)")
         print("="*80)
     
-    model = AdaptiveWindowCreativeAgent(encoding_dim=128, num_pairs=3).to(rank)
+    model = AdaptiveWindowCreativeAgent(
+        encoding_dim=args.encoding_dim,
+        num_pairs=args.num_pairs
+    ).to(rank)
     model = DDP(model, device_ids=[rank], find_unused_parameters=True)
     
     # Count parameters
@@ -623,9 +639,13 @@ def worker_main(rank, world_size, args):
     discriminator = None
     disc_optimizer = None
     if args.gan_weight > 0:
-        discriminator = AudioDiscriminator(encoding_dim=128).to(rank)
+        discriminator = AudioDiscriminator(encoding_dim=args.encoding_dim).to(rank)
         discriminator = DDP(discriminator, device_ids=[rank])
-        disc_optimizer = torch.optim.AdamW(discriminator.parameters(), lr=args.learning_rate * 0.5)
+        disc_optimizer = torch.optim.AdamW(
+            discriminator.parameters(),
+            lr=args.disc_lr,
+            weight_decay=args.weight_decay
+        )
         
         disc_params = sum(p.numel() for p in discriminator.parameters())
         if rank == 0:
@@ -636,7 +656,11 @@ def worker_main(rank, world_size, args):
             print("="*80)
     
     # Optimizer
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate)
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=args.learning_rate,
+        weight_decay=args.weight_decay
+    )
     
     # Dataset
     if rank == 0:
@@ -661,7 +685,7 @@ def worker_main(rank, world_size, args):
         batch_size=args.batch_size,
         sampler=train_sampler,
         collate_fn=collate_fn,
-        num_workers=4,
+        num_workers=args.num_workers,
         pin_memory=True
     )
     val_loader = DataLoader(
@@ -669,7 +693,7 @@ def worker_main(rank, world_size, args):
         batch_size=args.batch_size,
         sampler=val_sampler,
         collate_fn=collate_fn,
-        num_workers=4,
+        num_workers=args.num_workers,
         pin_memory=True
     )
     
@@ -776,17 +800,22 @@ def worker_main(rank, world_size, args):
             print(f"\n  🔧 Learning Rate: {optimizer.param_groups[0]['lr']:.2e}")
             print("="*80)
         
-        # Save checkpoint every 10 epochs
-        if rank == 0 and epoch % 10 == 0:
+        # Save checkpoint
+        if rank == 0 and epoch % args.save_every == 0:
             checkpoint_path = f"{args.checkpoint_dir}/hybrid_epoch_{epoch}.pt"
             os.makedirs(args.checkpoint_dir, exist_ok=True)
-            torch.save({
+            checkpoint_data = {
                 'epoch': epoch,
                 'model_state_dict': model.module.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'train_metrics': train_metrics,
                 'val_metrics': val_metrics,
-            }, checkpoint_path)
+                'args': vars(args),
+            }
+            if discriminator is not None:
+                checkpoint_data['discriminator_state_dict'] = discriminator.module.state_dict()
+                checkpoint_data['disc_optimizer_state_dict'] = disc_optimizer.state_dict()
+            torch.save(checkpoint_data, checkpoint_path)
             print(f"\n💾 Checkpoint saved: {checkpoint_path}\n")
     
     cleanup_ddp()
@@ -801,8 +830,25 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--batch_size', type=int, default=6)
     parser.add_argument('--learning_rate', type=float, default=1e-4)
+    parser.add_argument('--weight_decay', type=float, default=0.01)
     parser.add_argument('--dataset_dir', type=str, required=True)
     parser.add_argument('--checkpoint_dir', type=str, default='./checkpoints_hybrid')
+    parser.add_argument('--num_workers', type=int, default=8)
+    parser.add_argument('--save_every', type=int, default=10)
+    parser.add_argument('--patience', type=int, default=50)
+    parser.add_argument('--seed', type=int, default=42)
+    
+    # Architecture params
+    parser.add_argument('--num_pairs', type=int, default=3)
+    parser.add_argument('--encoding_dim', type=int, default=128)
+    parser.add_argument('--nhead', type=int, default=8)
+    parser.add_argument('--num_layers', type=int, default=6)
+    parser.add_argument('--num_transformer_layers', type=int, default=2)
+    parser.add_argument('--dropout', type=float, default=0.1)
+    
+    # EnCodec params
+    parser.add_argument('--encodec_bandwidth', type=float, default=6.0)
+    parser.add_argument('--encodec_sr', type=int, default=24000)
     
     # Loss weights
     parser.add_argument('--loss_weight_input', type=float, default=0.3)
@@ -810,12 +856,17 @@ if __name__ == '__main__':
     parser.add_argument('--loss_weight_spectral', type=float, default=0.01)
     parser.add_argument('--loss_weight_mel', type=float, default=0.01)
     parser.add_argument('--corr_weight', type=float, default=0.5)
+    parser.add_argument('--anti_cheating', type=float, default=0.2)
     parser.add_argument('--mask_reg_weight', type=float, default=0.1)
     parser.add_argument('--balance_loss_weight', type=float, default=15.0)
     
     # GAN params
     parser.add_argument('--gan_weight', type=float, default=0.1)
+    parser.add_argument('--disc_lr', type=float, default=5e-5)
     parser.add_argument('--disc_update_freq', type=int, default=1)
+    
+    # Agent params
+    parser.add_argument('--use_compositional_agent', type=str, default='true')
     
     # Special modes
     parser.add_argument('--unity_test', action='store_true')
