@@ -32,7 +32,7 @@ echo "  CUDA devices: $CUDA_VISIBLE_DEVICES"
 echo ""
 
 # Set environment variables for multi-GPU training
-export NCCL_DEBUG=INFO
+export NCCL_DEBUG=WARN
 export NCCL_IB_DISABLE=0
 export NCCL_NET_GDR_LEVEL=5
 export OMP_NUM_THREADS=8

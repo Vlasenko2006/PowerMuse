@@ -346,17 +346,8 @@ class AdaptiveWindowCreativeAgent(nn.Module):
         # Compositional creative agent (shared across all pairs)
         self.creative_agent = CompositionalCreativeAgent(encoding_dim)
         
-        print(f"AdaptiveWindowCreativeAgent initialized:")
-        print(f"  Input/Target duration: 24 seconds (1200 frames)")
-        print(f"  Window duration: 16 seconds (800 frames)")
-        print(f"  Number of pairs: {num_pairs}")
-        print(f"  Compression range: 1.0x - 1.5x")
-        print(f"  Components:")
-        print(f"    - WindowSelector: ~3.2M parameters")
-        print(f"    - TemporalCompressor: 0 parameters (interpolation)")
-        print(f"    - TonalityReducer (×2): ~0.2M parameters")
-        print(f"    - CompositionalAgent: ~14.6M parameters (shared)")
-        print(f"  Total NEW parameters: ~3.6M (agent shared)")
+        if os.environ.get('RANK', '0') == '0':  # Only print on main process
+            print(f"AdaptiveWindowCreativeAgent: 24→16sec windows, {num_pairs} pairs, ~3.6M params")
     
     def extract_window(self, encoded, start_position, duration=800):
         """
