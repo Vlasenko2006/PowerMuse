@@ -5,6 +5,10 @@ DDP Worker for Adaptive Window Selection Training
 Combines adaptive window selection with full DDP training features.
 """
 
+import warnings
+warnings.filterwarnings('ignore', category=FutureWarning, message='.*weight_norm.*')
+warnings.filterwarnings('ignore', category=UserWarning, message='.*torch.distributed.*')
+
 import os
 import torch
 import torch.nn as nn
