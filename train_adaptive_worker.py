@@ -406,52 +406,7 @@ def validate(model, dataloader, encodec_model, rank, world_size, args):
             print(f"     ⚠️  Output is highly correlated with INPUT (possible identity)")
         else:
             print(f"     ✓ Output appears to mix both sources")
-        print(
-    
-    with torch.no_grad():
-        if rank == 0:
-            pbar = tqdm(dataloader, desc="Validation", ncols=120)
-        else:
-            pbar = dataloader
-        
-        for audio_inputs, audio_targets in pbar:
-            audio_inputs = audio_inputs.cuda(rank)
-            audio_targets = audio_targets.cuda(rank)
-            
-            # Unity test
-            if args.unity_test:
-                audio_targets = audio_inputs.clone()
-            
-            # Encode
-            encoded_inputs = encode_audio_batch(audio_inputs, encodec_model)
-            encoded_targets = encode_audio_batch(audio_targets, encodec_model)
-            
-            # Forward
-            outputs, losses, metadata = model(encoded_inputs, encoded_targets)
-            mean_novelty_loss = torch.mean(torch.stack(losses))
-            
-            loss = args.mask_reg_weight * mean_novelty_loss
-            spectral_loss_value = 0.0
-            
-            if args.loss_weight_spectral > 0:
-                spectral_loss = sum([torch.nn.functional.mse_loss(out, encoded_targets[:, :, :800]) 
-                                    for out in outputs]) / len(outputs)
-                spectral_loss_value = spectral_loss.item()
-                loss = loss + args.loss_weight_spectral * spectral_loss
-            
-            total_loss += loss.item()
-            total_novelty += mean_novelty_loss.item()
-            total_spectral += spectral_loss_value
-            num_batches += 1
-            
-            if rank == 0:
-                postfix = {
-                    'loss': f'{loss.item():.4f}',
-                    'novelty': f'{mean_novelty_loss.item():.4f}'
-                }
-                if args.loss_weight_spectral > 0:
-                    postfix['spectral'] = f'{spectral_loss_value:.4f}'
-                pbar.set_postfix(postfix)
+        print()
     
     # Synchronize
     avg_loss_tensor = torch.tensor([total_loss / num_batches], device=rank)
