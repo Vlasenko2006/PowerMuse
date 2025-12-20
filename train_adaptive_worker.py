@@ -66,11 +66,23 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
     
     total_loss = 0.0
     total_novelty = 0.0
+    total_spectral = 0.0
     num_batches = 0
+    
+    # Track window selection statistics
+    total_pair0_start = 0.0
+    total_pair1_start = 0.0
+    total_pair2_start = 0.0
+    total_pair0_ratio = 0.0
+    total_pair1_ratio = 0.0
+    total_pair2_ratio = 0.0
+    total_pair0_tonality = 0.0
+    total_pair1_tonality = 0.0
+    total_pair2_tonality = 0.0
     
     # Only show progress bar on rank 0
     if rank == 0:
-        pbar = tqdm(dataloader, desc=f"Epoch {epoch}")
+        pbar = tqdm(dataloader, desc=f"Epoch {epoch}", ncols=140)
     else:
         pbar = dataloader
     
@@ -82,11 +94,15 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
         # Unity test: replace target with input
         if args.unity_test:
             audio_targets = audio_inputs.clone()
+            if rank == 0 and batch_idx == 0:
+                print(f"\n🔍 Unity Test ENABLED: target = input (sanity check)")
         
         # Shuffle targets: random pairing
         if args.shuffle_targets:
             indices = torch.randperm(audio_targets.size(0), device=audio_targets.device)
             audio_targets = audio_targets[indices]
+            if rank == 0 and batch_idx == 0:
+                print(f"🎲 Shuffle Targets ENABLED: random pairing for creativity")
         
         # Encode audio
         encoded_inputs = encode_audio_batch(audio_inputs, encodec_model)  # [B, 128, 1200]
@@ -96,18 +112,21 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
         outputs, losses, metadata = model(encoded_inputs, encoded_targets)
         # outputs: List of 3 tensors [B, 128, 800]
         # losses: List of 3 scalars (novelty losses)
+        # metadata: Dict with window selection info
         
         # Compute mean novelty loss
         mean_novelty_loss = torch.mean(torch.stack(losses))
         
         # Total loss
         loss = args.mask_reg_weight * mean_novelty_loss
+        spectral_loss_value = 0.0
         
         # Add spectral loss if requested
         if args.loss_weight_spectral > 0:
             # Simple MSE on outputs as spectral proxy
             spectral_loss = sum([torch.nn.functional.mse_loss(out, encoded_targets[:, :, :800]) 
                                 for out in outputs]) / len(outputs)
+            spectral_loss_value = spectral_loss.item()
             loss = loss + args.loss_weight_spectral * spectral_loss
         
         # Backward
@@ -122,28 +141,75 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
         # Stats
         total_loss += loss.item()
         total_novelty += mean_novelty_loss.item()
+        total_spectral += spectral_loss_value
         num_batches += 1
+        
+        # Track window selection statistics
+        if 'pairs' in metadata and len(metadata['pairs']) >= 3:
+            total_pair0_start += metadata['pairs'][0]['start_input_mean']
+            total_pair1_start += metadata['pairs'][1]['start_input_mean']
+            total_pair2_start += metadata['pairs'][2]['start_input_mean']
+            total_pair0_ratio += metadata['pairs'][0]['ratio_input_mean']
+            total_pair1_ratio += metadata['pairs'][1]['ratio_input_mean']
+            total_pair2_ratio += metadata['pairs'][2]['ratio_input_mean']
+            total_pair0_tonality += metadata['pairs'][0].get('tonality_input_mean', 0.0)
+            total_pair1_tonality += metadata['pairs'][1].get('tonality_input_mean', 0.0)
+            total_pair2_tonality += metadata['pairs'][2].get('tonality_input_mean', 0.0)
         
         # Update progress bar (rank 0 only)
         if rank == 0:
-            pbar.set_postfix({
+            postfix = {
                 'loss': f'{loss.item():.4f}',
                 'novelty': f'{mean_novelty_loss.item():.4f}',
-                'pair0_start': f'{metadata["pairs"][0]["start_input_mean"]:.1f}',
-                'pair0_ratio': f'{metadata["pairs"][0]["ratio_input_mean"]:.2f}x'
-            })
+            }
+            
+            if args.loss_weight_spectral > 0:
+                postfix['spectral'] = f'{spectral_loss_value:.4f}'
+            
+            # Show window selection info for first pair
+            if 'pairs' in metadata and len(metadata['pairs']) > 0:
+                postfix['p0_start'] = f'{metadata["pairs"][0]["start_input_mean"]:.0f}'
+                postfix['p0_ratio'] = f'{metadata["pairs"][0]["ratio_input_mean"]:.2f}x'
+            
+            pbar.set_postfix(postfix)
+        
+        # Debug printout for first batch of first epoch
+        if rank == 0 and batch_idx == 0 and epoch == 1:
+            print(f"\n🎯 First Batch Window Selection:")
+            for i, pair in enumerate(metadata['pairs'][:3]):
+                print(f"  Pair {i}: start={pair['start_input_mean']:.1f}f, "
+                      f"ratio={pair['ratio_input_mean']:.2f}x, "
+                      f"tonality={pair.get('tonality_input_mean', 0.0):.2f}")
     
     # Synchronize losses across GPUs
     avg_loss_tensor = torch.tensor([total_loss / num_batches], device=rank)
     avg_novelty_tensor = torch.tensor([total_novelty / num_batches], device=rank)
+    avg_spectral_tensor = torch.tensor([total_spectral / num_batches], device=rank)
     
     dist.all_reduce(avg_loss_tensor, op=dist.ReduceOp.SUM)
     dist.all_reduce(avg_novelty_tensor, op=dist.ReduceOp.SUM)
+    dist.all_reduce(avg_spectral_tensor, op=dist.ReduceOp.SUM)
     
     avg_loss = avg_loss_tensor.item() / world_size
     avg_novelty = avg_novelty_tensor.item() / world_size
+    avg_spectral = avg_spectral_tensor.item() / world_size
     
-    return avg_loss, avg_novelty
+    # Compute window statistics
+    window_stats = None
+    if num_batches > 0:
+        window_stats = {
+            'pair0_start': total_pair0_start / num_batches,
+            'pair1_start': total_pair1_start / num_batches,
+            'pair2_start': total_pair2_start / num_batches,
+            'pair0_ratio': total_pair0_ratio / num_batches,
+            'pair1_ratio': total_pair1_ratio / num_batches,
+            'pair2_ratio': total_pair2_ratio / num_batches,
+            'pair0_tonality': total_pair0_tonality / num_batches,
+            'pair1_tonality': total_pair1_tonality / num_batches,
+            'pair2_tonality': total_pair2_tonality / num_batches,
+        }
+    
+    return avg_loss, avg_novelty, avg_spectral, window_stats
 
 
 def validate(model, dataloader, encodec_model, rank, world_size, args):
@@ -152,11 +218,12 @@ def validate(model, dataloader, encodec_model, rank, world_size, args):
     
     total_loss = 0.0
     total_novelty = 0.0
+    total_spectral = 0.0
     num_batches = 0
     
     with torch.no_grad():
         if rank == 0:
-            pbar = tqdm(dataloader, desc="Validation")
+            pbar = tqdm(dataloader, desc="Validation", ncols=120)
         else:
             pbar = dataloader
         
@@ -177,27 +244,42 @@ def validate(model, dataloader, encodec_model, rank, world_size, args):
             mean_novelty_loss = torch.mean(torch.stack(losses))
             
             loss = args.mask_reg_weight * mean_novelty_loss
+            spectral_loss_value = 0.0
             
             if args.loss_weight_spectral > 0:
                 spectral_loss = sum([torch.nn.functional.mse_loss(out, encoded_targets[:, :, :800]) 
                                     for out in outputs]) / len(outputs)
+                spectral_loss_value = spectral_loss.item()
                 loss = loss + args.loss_weight_spectral * spectral_loss
             
             total_loss += loss.item()
             total_novelty += mean_novelty_loss.item()
+            total_spectral += spectral_loss_value
             num_batches += 1
+            
+            if rank == 0:
+                postfix = {
+                    'loss': f'{loss.item():.4f}',
+                    'novelty': f'{mean_novelty_loss.item():.4f}'
+                }
+                if args.loss_weight_spectral > 0:
+                    postfix['spectral'] = f'{spectral_loss_value:.4f}'
+                pbar.set_postfix(postfix)
     
     # Synchronize
     avg_loss_tensor = torch.tensor([total_loss / num_batches], device=rank)
     avg_novelty_tensor = torch.tensor([total_novelty / num_batches], device=rank)
+    avg_spectral_tensor = torch.tensor([total_spectral / num_batches], device=rank)
     
     dist.all_reduce(avg_loss_tensor, op=dist.ReduceOp.SUM)
     dist.all_reduce(avg_novelty_tensor, op=dist.ReduceOp.SUM)
+    dist.all_reduce(avg_spectral_tensor, op=dist.ReduceOp.SUM)
     
     avg_loss = avg_loss_tensor.item() / world_size
     avg_novelty = avg_novelty_tensor.item() / world_size
+    avg_spectral = avg_spectral_tensor.item() / world_size
     
-    return avg_loss, avg_novelty
+    return avg_loss, avg_novelty, avg_spectral
 
 
 def train_adaptive_worker(rank, world_size, args):
@@ -324,21 +406,64 @@ def train_adaptive_worker(rank, world_size, args):
         train_sampler.set_epoch(epoch)
         
         # Train
-        train_loss, train_novelty = train_epoch(
+        train_loss, train_novelty, train_spectral, train_window_stats = train_epoch(
             model, train_loader, encodec_model, optimizer,
             rank, world_size, args, epoch
         )
         
         # Validate
-        val_loss, val_novelty = validate(
+        val_loss, val_novelty, val_spectral = validate(
             model, val_loader, encodec_model, rank, world_size, args
         )
         
         # Print results (rank 0 only)
         if rank == 0:
-            print(f"\nEpoch {epoch} Results:")
-            print(f"  Train Loss: {train_loss:.4f} (novelty: {train_novelty:.4f})")
-            print(f"  Val Loss: {val_loss:.4f} (novelty: {val_novelty:.4f})")
+            print(f"\n{'='*80}")
+            print(f"Epoch {epoch}/{args.epochs} Results:")
+            print(f"{'='*80}")
+            print(f"  📊 Train Metrics:")
+            print(f"     Total Loss:    {train_loss:.4f}")
+            print(f"     Novelty Loss:  {train_novelty:.4f} (weight: {args.mask_reg_weight})")
+            if args.loss_weight_spectral > 0:
+                print(f"     Spectral Loss: {train_spectral:.4f} (weight: {args.loss_weight_spectral})")
+            
+            print(f"\n  🎯 Adaptive Window Selection (Training):")
+            if train_window_stats:
+                print(f"     Pair 0: start={train_window_stats['pair0_start']:6.1f}f  ratio={train_window_stats['pair0_ratio']:.2f}x  tonality={train_window_stats['pair0_tonality']:.2f}")
+                print(f"     Pair 1: start={train_window_stats['pair1_start']:6.1f}f  ratio={train_window_stats['pair1_ratio']:.2f}x  tonality={train_window_stats['pair1_tonality']:.2f}")
+                print(f"     Pair 2: start={train_window_stats['pair2_start']:6.1f}f  ratio={train_window_stats['pair2_ratio']:.2f}x  tonality={train_window_stats['pair2_tonality']:.2f}")
+                
+                # Check window diversity
+                start_std = torch.std(torch.tensor([
+                    train_window_stats['pair0_start'],
+                    train_window_stats['pair1_start'],
+                    train_window_stats['pair2_start']
+                ])).item()
+                
+                ratio_std = torch.std(torch.tensor([
+                    train_window_stats['pair0_ratio'],
+                    train_window_stats['pair1_ratio'],
+                    train_window_stats['pair2_ratio']
+                ])).item()
+                
+                print(f"     Diversity: start_std={start_std:.1f}f, ratio_std={ratio_std:.3f}x")
+                
+                if start_std < 10:
+                    print(f"     ⚠️  WARNING: Low window diversity (all selecting similar positions)")
+                elif start_std > 50:
+                    print(f"     ✓ Good window diversity")
+            
+            print(f"\n  📈 Validation Metrics:")
+            print(f"     Total Loss:    {val_loss:.4f}")
+            print(f"     Novelty Loss:  {val_novelty:.4f}")
+            if args.loss_weight_spectral > 0:
+                print(f"     Spectral Loss: {val_spectral:.4f}")
+            
+            print(f"\n  ⚙️  Training Config:")
+            print(f"     Learning Rate: {optimizer.param_groups[0]['lr']:.2e}")
+            print(f"     Batch Size:    {args.batch_size} × {world_size} GPUs = {args.batch_size * world_size}")
+            print(f"     Num Pairs:     {args.num_pairs}")
+            print(f"{'='*80}\n")
             
             # Save checkpoint
             if epoch % args.save_every == 0 or val_loss < best_val_loss:
