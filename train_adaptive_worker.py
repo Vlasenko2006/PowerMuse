@@ -10,6 +10,7 @@ warnings.filterwarnings('ignore', category=FutureWarning, message='.*weight_norm
 warnings.filterwarnings('ignore', category=UserWarning, message='.*torch.distributed.*')
 
 import os
+import sys
 import torch
 import torch.nn as nn
 import torch.distributed as dist
@@ -96,7 +97,9 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
     
     # Only show progress bar on rank 0
     if rank == 0:
-        pbar = tqdm(dataloader, desc=f"Epoch {epoch}", ncols=140, disable=False, leave=True, position=0)
+        pbar = tqdm(dataloader, desc=f"Epoch {epoch}", ncols=140, 
+                   file=sys.stdout, dynamic_ncols=False, 
+                   leave=True, position=0, mininterval=1.0)
     else:
         pbar = dataloader
     
@@ -358,7 +361,9 @@ def validate(model, dataloader, encodec_model, rank, world_size, args):
     
     with torch.no_grad():
         if rank == 0:
-            pbar = tqdm(dataloader, desc="Validation", ncols=120, disable=False, leave=True, position=0)
+            pbar = tqdm(dataloader, desc="Validation", ncols=120, 
+                       file=sys.stdout, dynamic_ncols=False,
+                       leave=True, position=0, mininterval=1.0)
         else:
             pbar = dataloader
         
