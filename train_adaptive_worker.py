@@ -223,22 +223,14 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
             total_pair1_tonality += metadata['pairs'][1].get('tonality_input_mean', 0.0)
             total_pair2_tonality += metadata['pairs'][2].get('tonality_input_mean', 0.0)
         
-        # Update progress bar (rank 0 only)
+        # Update progress (rank 0 only) - manual print every 20 batches
         if rank == 0:
-            postfix = {
-                'loss': f'{loss.item():.4f}',
-                'novelty': f'{mean_novelty_loss.item():.4f}',
-            }
-            
-            if args.loss_weight_spectral > 0:
-                postfix['spectral'] = f'{spectral_loss_value:.4f}'
-            
-            # Show window selection info for first pair
-            if 'pairs' in metadata and len(metadata['pairs']) > 0:
-                postfix['p0_start'] = f'{metadata["pairs"][0]["start_input_mean"]:.0f}'
-                postfix['p0_ratio'] = f'{metadata["pairs"][0]["ratio_input_mean"]:.2f}x'
-            
-            pbar.set_postfix(postfix)
+            if batch_idx % 20 == 0 or batch_idx == total_batches - 1:
+                progress_pct = (batch_idx + 1) / total_batches * 100
+                print(f"Epoch {epoch}: {batch_idx+1}/{total_batches} ({progress_pct:.0f}%) - "
+                      f"loss={loss.item():.4f}, novelty={mean_novelty_loss.item():.4f}, "
+                      f"rms_in={rms_input_val.item() if isinstance(rms_input_val, torch.Tensor) else rms_input_val:.4f}, "
+                      f"rms_tgt={rms_target_val.item() if isinstance(rms_target_val, torch.Tensor) else rms_target_val:.4f}")
         
         # Debug printout for first batch of first epoch
         if rank == 0 and batch_idx == 0 and epoch == 1:
