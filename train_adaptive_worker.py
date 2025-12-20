@@ -133,6 +133,38 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
         optimizer.zero_grad()
         loss.backward()
         
+        # Debug: Check gradients on first batch of first epoch
+        if batch_idx == 0 and epoch == 1 and rank == 0:
+            print(f"\n{'='*80}")
+            print(f"GRADIENT DEBUGGING (First batch, Epoch {epoch})")
+            print(f"{'='*80}")
+            total_grad_norm = 0.0
+            grad_info = []
+            for name, param in model.named_parameters():
+                if param.grad is not None:
+                    grad_norm = param.grad.norm().item()
+                    total_grad_norm += grad_norm ** 2
+                    grad_info.append((name, grad_norm, param.grad.abs().mean().item(), param.grad.abs().max().item()))
+            
+            total_grad_norm = total_grad_norm ** 0.5
+            print(f"Total gradient norm (before clipping): {total_grad_norm:.6f}")
+            
+            # Show top 10 gradients by norm
+            print("\nTop 10 parameters by gradient norm:")
+            for name, norm, mean, max_val in sorted(grad_info, key=lambda x: -x[1])[:10]:
+                print(f"  {name:50s}: norm={norm:.6f}, mean={mean:.6f}, max={max_val:.6f}")
+            
+            # Check for zero gradients
+            zero_grad = [name for name, norm, _, _ in grad_info if norm < 1e-8]
+            if zero_grad:
+                print(f"\n⚠️  WARNING: {len(zero_grad)} parameters have near-zero gradients:")
+                for name in zero_grad[:5]:
+                    print(f"    {name}")
+                if len(zero_grad) > 5:
+                    print(f"    ... and {len(zero_grad)-5} more")
+            
+            print(f"{'='*80}\n")
+        
         # Gradient clipping
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         
@@ -212,14 +244,124 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
     return avg_loss, avg_novelty, avg_spectral, window_stats
 
 
-def validate(model, dataloader, encodec_model, rank, world_size, args):
-    """Validate"""
-    model.eval()
+def _create_waveform_visualization(audio, label, num_segments=50):
+    """
+    Create a text-based waveform visualization showing loudness over time.
     
-    total_loss = 0.0
-    total_novelty = 0.0
-    total_spectral = 0.0
-    num_batches = 0
+    Args:
+        audio: 1D audio tensor [samples]
+        label: Label for the waveform (e.g., "Input", "Target", "Output")
+        num_segments: Number of time segments to display (default: 50)
+    
+    # Store first batch samples for waveform visualization
+    first_input_audio = None
+    first_target_audio = None
+    first_output_audio = None
+    output_input_corr_sum = 0.0
+    output_target_corr_sum = 0.0
+    
+    with torch.no_grad():
+        if rank == 0:
+            pbar = tqdm(dataloader, desc="Validation", ncols=120)
+        else:
+            pbar = dataloader
+        
+        for batch_idx, (audio_inputs, audio_targets) in enumerate(pbar):
+            audio_inputs = audio_inputs.cuda(rank)
+            audio_targets = audio_targets.cuda(rank)
+            
+            # Unity test
+            if args.unity_test:
+                audio_targets = audio_inputs.clone()
+            
+            # Encode
+            encoded_inputs = encode_audio_batch(audio_inputs, encodec_model)
+            encoded_targets = encode_audio_batch(audio_targets, encodec_model)
+            
+            # Forward
+            outputs, losses, metadata = model(encoded_inputs, encoded_targets)
+            mean_novelty_loss = torch.mean(torch.stack(losses))
+            
+            loss = args.mask_reg_weight * mean_novelty_loss
+            spectral_loss_value = 0.0
+            
+            if args.loss_weight_spectral > 0:
+                spectral_loss = sum([torch.nn.functional.mse_loss(out, encoded_targets[:, :, :800]) 
+                                    for out in outputs]) / len(outputs)
+                spectral_loss_value = spectral_loss.item()
+                loss = loss + args.loss_weight_spectral * spectral_loss
+            
+            # Store first sample for visualization (use first output pair)
+            if first_input_audio is None and rank == 0 and len(outputs) > 0:
+                # Decode to get audio waveforms
+                output_audio = encodec_model.decoder(outputs[0][:1])  # First sample, first pair [1, 1, samples]
+                input_audio = audio_inputs[:1]  # [1, 1, samples]
+                target_audio = audio_targets[:1]  # [1, 1, samples]
+                
+                first_input_audio = input_audio[0, 0].cpu()  # [samples]
+                first_target_audio = target_audio[0, 0].cpu()
+                first_output_audio = output_audio[0, 0].cpu()
+                
+                # Compute correlations for this sample
+                import numpy as np
+                out_np = first_output_audio.numpy()
+                tgt_np = first_target_audio.numpy()
+                in_np = first_input_audio.numpy()
+                
+                # Ensure same length for correlation
+                min_len = min(len(out_np), len(tgt_np), len(in_np))
+                out_np = out_np[:min_len]
+                tgt_np = tgt_np[:min_len]
+                in_np = in_np[:min_len]
+                
+                corr_out_tgt = np.corrcoef(out_np, tgt_np)[0, 1]
+                corr_out_in = np.corrcoef(out_np, in_np)[0, 1]
+                output_target_corr_sum = corr_out_tgt
+                output_input_corr_sum = corr_out_in
+            
+            total_loss += loss.item()
+            total_novelty += mean_novelty_loss.item()
+            total_spectral += spectral_loss_value
+            num_batches += 1
+            
+            if rank == 0:
+                postfix = {
+                    'loss': f'{loss.item():.4f}',
+                    'novelty': f'{mean_novelty_loss.item():.4f}'
+                }
+                if args.loss_weight_spectral > 0:
+                    postfix['spectral'] = f'{spectral_loss_value:.4f}'
+                pbar.set_postfix(postfix)
+    
+    # Display waveform visualization on rank 0
+    if rank == 0 and first_input_audio is not None:
+        print()  # New line after validation progress bar
+        
+        # Compute RMS levels
+        input_rms = torch.sqrt(torch.mean(first_input_audio ** 2))
+        target_rms = torch.sqrt(torch.mean(first_target_audio ** 2))
+        output_rms = torch.sqrt(torch.mean(first_output_audio ** 2))
+        
+        # Display waveforms
+        print(f"\n  🎵 Waveform Visualization (First validation sample):")
+        print(f"  {_create_waveform_visualization(first_input_audio, 'Input ')}")
+        print(f"  {_create_waveform_visualization(first_target_audio, 'Target')}")
+        print(f"  {_create_waveform_visualization(first_output_audio, 'Output')}")
+        
+        # Display statistics
+        rms_ratio = output_rms.item() / input_rms.item() if input_rms.item() > 1e-8 else 0.0
+        print(f"\n  📊 Audio Statistics:")
+        print(f"     RMS: Input={input_rms.item():.4f}  Target={target_rms.item():.4f}  Output={output_rms.item():.4f}")
+        print(f"     Out/In ratio: {rms_ratio:.2f}")
+        print(f"     Correlation: Out→Target={output_target_corr_sum:.3f}  Out→Input={output_input_corr_sum:.3f}")
+        
+        if abs(output_target_corr_sum) > abs(output_input_corr_sum) * 1.5:
+            print(f"     ⚠️  Output is highly correlated with TARGET (possible copying)")
+        elif abs(output_input_corr_sum) > abs(output_target_corr_sum) * 1.5:
+            print(f"     ⚠️  Output is highly correlated with INPUT (possible identity)")
+        else:
+            print(f"     ✓ Output appears to mix both sources")
+        print(
     
     with torch.no_grad():
         if rank == 0:
