@@ -346,8 +346,7 @@ class AdaptiveWindowCreativeAgent(nn.Module):
         # Compositional creative agent (shared across all pairs)
         self.creative_agent = CompositionalCreativeAgent(encoding_dim)
         
-        if os.environ.get('RANK', '0') == '0':  # Only print on main process
-            print(f"AdaptiveWindowCreativeAgent: 24→16sec windows, {num_pairs} pairs, ~3.6M params")
+        # Silent initialization (print suppressed for DDP)
     
     def extract_window(self, encoded, start_position, duration=800):
         """
