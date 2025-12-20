@@ -113,17 +113,39 @@ echo "STARTING TRAINING"
 echo "=================================================="
 echo ""
 
-# Run training
-python train_adaptive_simple.py \
+# Run training with DDP
+python train_adaptive_ddp.py \
     --dataset_folder dataset_pairs_wav_24sec \
     --batch_size 6 \
     --num_workers 8 \
     --epochs 50 \
-    --learning_rate 0.0001 \
-    --novelty_weight 0.1 \
+    --lr 1e-4 \
+    --weight_decay 0.01 \
     --checkpoint_dir checkpoints_adaptive \
-    --device cuda \
+    --world_size 4 \
     --num_pairs 3 \
+    --encoding_dim 128 \
+    --nhead 8 \
+    --num_layers 6 \
+    --num_transformer_layers 3 \
+    --dropout 0.1 \
+    --encodec_bandwidth 6.0 \
+    --encodec_sr 24000 \
+    --use_compositional_agent true \
+    --mask_reg_weight 0.1 \
+    --balance_loss_weight 25.0 \
+    --corr_weight 0.5 \
+    --loss_weight_spectral 0.01 \
+    --loss_weight_target 0.00 \
+    --loss_weight_input 0.00 \
+    --gan_weight 0.01 \
+    --disc_lr 5e-5 \
+    --disc_update_freq 1 \
+    --shuffle_targets true \
+    --anti_cheating 0.0 \
+    --save_every 1 \
+    --patience 50 \
+    --seed 42 \
     2>&1 | stdbuf -oL -eL tee logs/train_adaptive_$(date +%Y%m%d_%H%M%S).log
 
 EXIT_CODE=$?
