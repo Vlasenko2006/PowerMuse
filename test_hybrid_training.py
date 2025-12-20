@@ -131,19 +131,21 @@ print("\n[Test 5] Testing upsampling (800 → 1200 frames)...")
 try:
     outputs_upsampled = []
     for output in outputs_list:
-        # Direct interpolation: [B, D, T] format
-        # interpolate works on [N, C, L] and interpolates the last dimension L
         B, D, T = output.shape
         print(f"   Input shape: [B={B}, D={D}, T={T}]")
         
-        output_1200 = torch.nn.functional.interpolate(
-            output,
-            size=1200,
-            mode='linear',
-            align_corners=False
-        )
+        # Use adaptive_avg_pool1d for reliable upsampling
+        output_reshaped = output.reshape(B * D, 1, T)  # [B*D, 1, 800]
+        print(f"   Reshaped: {output_reshaped.shape}")
         
-        print(f"   Output {len(outputs_upsampled)}: {output.shape} → {output_1200.shape}")
+        output_upsampled = torch.nn.functional.adaptive_avg_pool1d(
+            output_reshaped, output_size=1200
+        )  # [B*D, 1, 1200]
+        print(f"   Upsampled: {output_upsampled.shape}")
+        
+        output_1200 = output_upsampled.reshape(B, D, 1200)  # [B, 128, 1200]
+        print(f"   Final: {output_1200.shape}")
+        
         assert output_1200.shape == (batch_size, 128, 1200), f"Wrong upsampled shape: {output_1200.shape}"
         outputs_upsampled.append(output_1200)
     
@@ -254,13 +256,15 @@ try:
     
     outputs_list, novelty_losses, metadata = model(encoded_input_grad, encoded_target_grad)
     
-    # Upsample
+    # Upsample using adaptive pooling
     outputs_upsampled = []
     for output in outputs_list:
-        # Direct interpolation
-        output_1200 = torch.nn.functional.interpolate(
-            output, size=1200, mode='linear', align_corners=False
+        B, D, T = output.shape
+        output_reshaped = output.reshape(B * D, 1, T)
+        output_upsampled = torch.nn.functional.adaptive_avg_pool1d(
+            output_reshaped, output_size=1200
         )
+        output_1200 = output_upsampled.reshape(B, D, 1200)
         outputs_upsampled.append(output_1200)
     
     encoded_output_grad = torch.stack(outputs_upsampled, dim=0).mean(dim=0)
