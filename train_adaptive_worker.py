@@ -253,6 +253,51 @@ def _create_waveform_visualization(audio, label, num_segments=50):
         label: Label for the waveform (e.g., "Input", "Target", "Output")
         num_segments: Number of time segments to display (default: 50)
     
+    Returns:
+        String with visualization (e.g., "Input  : ░░██░░██░░████...")
+    """
+    import numpy as np
+    
+    # Split audio into segments
+    segment_length = len(audio) // num_segments
+    
+    # Compute RMS for each segment
+    rms_values = []
+    for i in range(num_segments):
+        start = i * segment_length
+        end = start + segment_length
+        segment = audio[start:end]
+        rms = torch.sqrt(torch.mean(segment ** 2))
+        rms_values.append(rms.item())
+    
+    # Normalize to 0-1 range
+    rms_values = np.array(rms_values)
+    max_rms = rms_values.max()
+    if max_rms > 0:
+        rms_values = rms_values / max_rms
+    
+    # Create visualization string
+    vis = ""
+    for rms in rms_values:
+        if rms > 0.5:
+            vis += "██"
+        elif rms > 0.25:
+            vis += "░░"
+        else:
+            vis += "  "
+    
+    return f"{label}: {vis}"
+
+
+def validate(model, dataloader, encodec_model, rank, world_size, args):
+    """Validate"""
+    model.eval()
+    
+    total_loss = 0.0
+    total_novelty = 0.0
+    total_spectral = 0.0
+    num_batches = 0
+    
     # Store first batch samples for waveform visualization
     first_input_audio = None
     first_target_audio = None
