@@ -131,24 +131,21 @@ print("\n[Test 5] Testing upsampling (800 → 1200 frames)...")
 try:
     outputs_upsampled = []
     for output in outputs_list:
-        # Transpose [B, D, T] → [B, T, D]
+        # Direct interpolation: [B, D, T] format
+        # interpolate works on [N, C, L] and interpolates the last dimension L
         B, D, T = output.shape
-        output_transposed = output.transpose(1, 2)  # [B, 800, 128]
+        print(f"   Input shape: [B={B}, D={D}, T={T}]")
         
-        # Interpolate temporal dimension
-        output_upsampled = torch.nn.functional.interpolate(
-            output_transposed,
+        output_1200 = torch.nn.functional.interpolate(
+            output,
             size=1200,
             mode='linear',
             align_corners=False
-        )  # [B, 1200, 128]
+        )
         
-        # Transpose back [B, T, D] → [B, D, T]
-        output_1200 = output_upsampled.transpose(1, 2)  # [B, 128, 1200]
-        outputs_upsampled.append(output_1200)
-        
-        print(f"   Output {len(outputs_upsampled)-1}: {output.shape} → {output_1200.shape}")
+        print(f"   Output {len(outputs_upsampled)}: {output.shape} → {output_1200.shape}")
         assert output_1200.shape == (batch_size, 128, 1200), f"Wrong upsampled shape: {output_1200.shape}"
+        outputs_upsampled.append(output_1200)
     
     # Average outputs
     encoded_output = torch.stack(outputs_upsampled, dim=0).mean(dim=0)
@@ -260,12 +257,10 @@ try:
     # Upsample
     outputs_upsampled = []
     for output in outputs_list:
-        B, D, T = output.shape
-        output_transposed = output.transpose(1, 2)
-        output_upsampled = torch.nn.functional.interpolate(
-            output_transposed, size=1200, mode='linear', align_corners=False
+        # Direct interpolation
+        output_1200 = torch.nn.functional.interpolate(
+            output, size=1200, mode='linear', align_corners=False
         )
-        output_1200 = output_upsampled.transpose(1, 2)
         outputs_upsampled.append(output_1200)
     
     encoded_output_grad = torch.stack(outputs_upsampled, dim=0).mean(dim=0)
