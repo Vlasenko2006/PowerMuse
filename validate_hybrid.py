@@ -96,9 +96,12 @@ def encode_audio_batch(audio_batch, encodec_model, target_frames=1200):
     return latents
 
 
-def compute_metrics(model, encodec_model, dataloader, device, args):
+def compute_metrics(model, encodec_model, dataloader, device, args, max_batches=None):
     """
     Run validation and compute all metrics
+    
+    Args:
+        max_batches: If provided, process only this many batches
     
     Returns:
         Dictionary with averaged metrics
@@ -133,8 +136,12 @@ def compute_metrics(model, encodec_model, dataloader, device, args):
     
     num_batches = 0
     
+    total_batches = max_batches if max_batches is not None else len(dataloader)
+    
     with torch.no_grad():
-        for batch_idx, (encoded_inputs_1800, audio_targets) in enumerate(tqdm(dataloader, desc="Validation")):
+        for batch_idx, (encoded_inputs_1800, audio_targets) in enumerate(tqdm(dataloader, desc="Validation", total=total_batches)):
+            if max_batches is not None and batch_idx >= max_batches:
+                break
             # Dataset returns: (encoded_input at 1800 frames, raw_audio_target at 576k samples)
             audio_targets = audio_targets.to(device)
             
@@ -413,8 +420,12 @@ def main():
     
     print(f"  Validation samples: {len(val_dataset)}")
     
+    # Calculate max batches needed for num_samples
+    max_batches = (args.num_samples + args.batch_size - 1) // args.batch_size
+    print(f"  Processing {max_batches} batches for {args.num_samples} samples\n")
+    
     # Compute metrics
-    metrics = compute_metrics(model, encodec_model, val_loader, args.device, train_args)
+    metrics = compute_metrics(model, encodec_model, val_loader, args.device, train_args, max_batches=max_batches)
     
     # Print results
     print_results(metrics, epoch)
