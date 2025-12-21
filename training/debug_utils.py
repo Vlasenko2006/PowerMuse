@@ -88,10 +88,16 @@ def print_training_progress(epoch, batch_idx, total_batches, loss, novelty_loss,
         rms_in_val = rms_input.item() if isinstance(rms_input, torch.Tensor) else rms_input
         rms_tgt_val = rms_target.item() if isinstance(rms_target, torch.Tensor) else rms_target
         
-        # Normal cascade printing (each update on new line)
-        print(f"Epoch {epoch}: {batch_idx+1}/{total_batches} ({progress_pct:.0f}%) - "
+        # Single-line update with carriage return
+        # Use \r to return to start of line, end='' to prevent newline, flush=True to update immediately
+        print(f"\rEpoch {epoch}: {batch_idx+1}/{total_batches} ({progress_pct:.0f}%) - "
               f"loss={loss_val:.4f}, novelty={novelty_val:.4f}, "
-              f"rms_in={rms_in_val:.4f}, rms_tgt={rms_tgt_val:.4f}")
+              f"rms_in={rms_in_val:.4f}, rms_tgt={rms_tgt_val:.4f}", 
+              end='', flush=True)
+        
+        # Print newline only at the end of epoch
+        if batch_idx == total_batches - 1:
+            print()  # Final newline
 
 
 def print_window_selection_debug(metadata, epoch, rank):
