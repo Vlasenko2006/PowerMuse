@@ -196,18 +196,19 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
         pair_corr_penalty = []
         
         for idx, encoded_output in enumerate(outputs_list):
-            # Decode this pair's output [B, 128, 800] → [B, 1, 384000] (16 sec)
+            # Decode this pair's output [B, 128, 800] → [B, 1, 256000] (10.67 sec)
             with torch.no_grad():
                 output_audio = encodec_model.decoder(encoded_output.detach())
             
-            # Extract center 16 seconds from input and target to match output length
-            # Input/target are 576000 samples (24 sec), output is 384000 samples (16 sec)
-            input_16sec = audio_inputs[:, :, 96000:480000]  # [B, 1, 384000]
-            target_16sec = original_targets[:, :, 96000:480000]  # [B, 1, 384000]
+            # Extract center 10.67 seconds from input and target to match output length
+            # 800 frames * 320 samples/frame = 256000 samples
+            # Center offset: (576000 - 256000) / 2 = 160000
+            input_10sec = audio_inputs[:, :, 160000:416000]  # [B, 1, 256000]
+            target_10sec = original_targets[:, :, 160000:416000]  # [B, 1, 256000]
             
             # Compute loss for this pair
             pair_loss, rms_in, rms_tgt, spec, mel, corr = combined_loss(
-                output_audio, input_16sec, target_16sec,
+                output_audio, input_10sec, target_10sec,
                 args.loss_weight_input, args.loss_weight_target,
                 args.loss_weight_spectral, args.loss_weight_mel,
                 weight_correlation=args.corr_weight
@@ -245,9 +246,9 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
         
         # Decode first output for spectral penalty, correlation analysis, and GAN training
         with torch.no_grad():
-            output_audio_first = encodec_model.decoder(outputs_list[0].detach())  # [B, 1, 384000]
-        input_16sec = audio_inputs[:, :, 96000:480000]
-        target_16sec = original_targets[:, :, 96000:480000]
+            output_audio_first = encodec_model.decoder(outputs_list[0].detach())  # [B, 1, 256000]
+        input_10sec = audio_inputs[:, :, 160000:416000]
+        target_10sec = original_targets[:, :, 160000:416000]
         
         # Spectral outlier penalty
         spectral_penalty = spectral_outlier_penalty(
@@ -260,8 +261,8 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
         # Compute correlation analysis (output vs input/target)
         with torch.no_grad():
             output_flat = output_audio_first.reshape(-1)
-            input_flat = input_16sec.reshape(-1)
-            target_flat = target_16sec.reshape(-1)
+            input_flat = input_10sec.reshape(-1)
+            target_flat = target_10sec.reshape(-1)
             
             # Correlations
             output_input_corr = torch.corrcoef(torch.stack([output_flat, input_flat]))[0, 1]
@@ -429,15 +430,15 @@ def validate(model, dataloader, encodec_model, rank, world_size, args):
             
             for idx, encoded_output in enumerate(outputs_list):
                 # Decode this pair's output
-                output_audio = encodec_model.decoder(encoded_output.detach())  # [B, 1, 384000]
+                output_audio = encodec_model.decoder(encoded_output.detach())  # [B, 1, 256000]
                 
-                # Extract center 16 seconds from input and target
-                input_16sec = audio_inputs[:, :, 96000:480000]
-                target_16sec = audio_targets[:, :, 96000:480000]
+                # Extract center 10.67 seconds from input and target
+                input_10sec = audio_inputs[:, :, 160000:416000]
+                target_10sec = audio_targets[:, :, 160000:416000]
                 
                 # Compute loss for this pair
                 pair_loss, rms_in, rms_tgt, spec, mel, corr = combined_loss(
-                    output_audio, input_16sec, target_16sec,
+                    output_audio, input_10sec, target_10sec,
                     args.loss_weight_input, args.loss_weight_target,
                     args.loss_weight_spectral, args.loss_weight_mel,
                     weight_correlation=0.0
@@ -463,8 +464,8 @@ def validate(model, dataloader, encodec_model, rank, world_size, args):
             # Store first sample (decode first output for visualization)
             if batch_idx == 0:
                 first_output_decoded = encodec_model.decoder(outputs_list[0][0:1].detach())  # First sample, first output
-                first_input_audio = audio_inputs[0:1, :, 96000:480000].cpu()
-                first_target_audio = audio_targets[0:1, :, 96000:480000].cpu()
+                first_input_audio = audio_inputs[0:1, :, 160000:416000].cpu()
+                first_target_audio = audio_targets[0:1, :, 160000:416000].cpu()
                 first_output_audio = first_output_decoded.cpu()
             
             # Accumulate
