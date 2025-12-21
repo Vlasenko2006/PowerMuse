@@ -298,45 +298,66 @@ def compute_metrics(model, encodec_model, dataloader, device, args, max_batches=
     return metrics
 
 
+def compute_rms_envelope(audio, window_size=512, hop_size=256):
+    """Compute RMS envelope for better visualization of dense signals"""
+    num_windows = (len(audio) - window_size) // hop_size + 1
+    rms = np.zeros(num_windows)
+    
+    for i in range(num_windows):
+        start = i * hop_size
+        end = start + window_size
+        window = audio[start:end]
+        rms[i] = np.sqrt(np.mean(window ** 2))
+    
+    return rms
+
+
 def visualize_waveforms(input_audio, target_audio, output_audio, output_path, sample_rate=24000):
-    """Visualize input, target, and output waveforms"""
+    """Visualize input, target, and output waveforms with RMS envelopes"""
     duration_input = len(input_audio) / sample_rate
     duration_target = len(target_audio) / sample_rate
     duration_output = len(output_audio) / sample_rate
     
-    time_input = np.linspace(0, duration_input, len(input_audio))
-    time_target = np.linspace(0, duration_target, len(target_audio))
-    time_output = np.linspace(0, duration_output, len(output_audio))
+    # Compute RMS envelopes for better visualization
+    hop_size = 256
+    rms_input = compute_rms_envelope(input_audio, hop_size=hop_size)
+    rms_target = compute_rms_envelope(target_audio, hop_size=hop_size)
+    rms_output = compute_rms_envelope(output_audio, hop_size=hop_size)
+    
+    time_input = np.linspace(0, duration_input, len(rms_input))
+    time_target = np.linspace(0, duration_target, len(rms_target))
+    time_output = np.linspace(0, duration_output, len(rms_output))
     
     fig, axes = plt.subplots(3, 1, figsize=(15, 10))
     
-    # Plot input
-    axes[0].plot(time_input, input_audio, color='blue', linewidth=0.5, alpha=0.7)
-    axes[0].set_title('Input Audio', fontsize=14, fontweight='bold')
-    axes[0].set_ylabel('Amplitude', fontsize=12)
+    # Plot input RMS envelope
+    axes[0].fill_between(time_input, 0, rms_input, color='blue', alpha=0.6)
+    axes[0].plot(time_input, rms_input, color='blue', linewidth=1.5)
+    axes[0].set_title('Input Audio (RMS Envelope)', fontsize=14, fontweight='bold')
+    axes[0].set_ylabel('RMS Amplitude', fontsize=12)
     axes[0].set_xlim(0, duration_input)
-    axes[0].set_ylim(-1.0, 1.0)
+    max_rms = max(rms_input.max(), rms_target.max(), rms_output.max()) * 1.1
+    axes[0].set_ylim(0, max_rms)
     axes[0].grid(True, alpha=0.3)
-    axes[0].axhline(y=0, color='k', linestyle='-', linewidth=0.5, alpha=0.3)
     
-    # Plot target
-    axes[1].plot(time_target, target_audio, color='green', linewidth=0.5, alpha=0.7)
-    axes[1].set_title('Target Audio (Ground Truth)', fontsize=14, fontweight='bold')
-    axes[1].set_ylabel('Amplitude', fontsize=12)
+    # Plot target RMS envelope
+    axes[1].fill_between(time_target, 0, rms_target, color='green', alpha=0.6)
+    axes[1].plot(time_target, rms_target, color='green', linewidth=1.5)
+    axes[1].set_title('Target Audio (Ground Truth, RMS Envelope)', fontsize=14, fontweight='bold')
+    axes[1].set_ylabel('RMS Amplitude', fontsize=12)
     axes[1].set_xlim(0, duration_target)
-    axes[1].set_ylim(-1.0, 1.0)
+    axes[1].set_ylim(0, max_rms)
     axes[1].grid(True, alpha=0.3)
-    axes[1].axhline(y=0, color='k', linestyle='-', linewidth=0.5, alpha=0.3)
     
-    # Plot output
-    axes[2].plot(time_output, output_audio, color='red', linewidth=0.5, alpha=0.7)
-    axes[2].set_title('Model Output', fontsize=14, fontweight='bold')
+    # Plot output RMS envelope
+    axes[2].fill_between(time_output, 0, rms_output, color='red', alpha=0.6)
+    axes[2].plot(time_output, rms_output, color='red', linewidth=1.5)
+    axes[2].set_title('Model Output (RMS Envelope)', fontsize=14, fontweight='bold')
     axes[2].set_xlabel('Time (seconds)', fontsize=12)
-    axes[2].set_ylabel('Amplitude', fontsize=12)
+    axes[2].set_ylabel('RMS Amplitude', fontsize=12)
     axes[2].set_xlim(0, duration_output)
-    axes[2].set_ylim(-1.0, 1.0)
+    axes[2].set_ylim(0, max_rms)
     axes[2].grid(True, alpha=0.3)
-    axes[2].axhline(y=0, color='k', linestyle='-', linewidth=0.5, alpha=0.3)
     
     plt.tight_layout()
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
