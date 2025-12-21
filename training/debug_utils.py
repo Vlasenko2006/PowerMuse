@@ -108,9 +108,12 @@ def print_window_selection_debug(metadata, epoch, rank):
     print(f"\n🎯 First Batch Window Selection:")
     if 'pairs' in metadata:
         for i, pair in enumerate(metadata['pairs'][:3]):
-            print(f"  Pair {i}: start={pair.get('start_input_mean', 0):.1f}f, "
-                  f"ratio={pair.get('ratio_input_mean', 0):.2f}x, "
-                  f"tonality={pair.get('tonality_input_mean', 0):.2f}")
+            print(f"  Pair {i}:")
+            print(f"    Input:  start={pair.get('start_input_mean', 0):.1f}f, "
+                  f"ratio={pair.get('ratio_input_mean', 0):.2f}x (compression)")
+            print(f"    Target: start={pair.get('start_target_mean', 0):.1f}f, "
+                  f"ratio={pair.get('ratio_target_mean', 0):.2f}x (compression)")
+            print(f"    Tonality strength: {pair.get('tonality_strength_mean', 0):.2f}")
 
 
 def print_epoch_summary(epoch, metrics, window_stats, rank):
@@ -159,16 +162,19 @@ def print_epoch_summary(epoch, metrics, window_stats, rank):
     
     # Window statistics if present
     if window_stats is not None:
-        print(f"\nWindow Selection Statistics:")
-        print(f"  Pair 0: start={window_stats['pair0_start']:.1f}f, "
-              f"ratio={window_stats['pair0_ratio']:.2f}x, "
-              f"tonality={window_stats['pair0_tonality']:.2f}")
-        print(f"  Pair 1: start={window_stats['pair1_start']:.1f}f, "
-              f"ratio={window_stats['pair1_ratio']:.2f}x, "
-              f"tonality={window_stats['pair1_tonality']:.2f}")
-        print(f"  Pair 2: start={window_stats['pair2_start']:.1f}f, "
-              f"ratio={window_stats['pair2_ratio']:.2f}x, "
-              f"tonality={window_stats['pair2_tonality']:.2f}")
+        print(f"\nWindow Selection Statistics (Averaged over Epoch):")
+        print(f"  Pair 0:")
+        print(f"    Input:  start={window_stats['pair0_start_in']:.1f}f, ratio={window_stats['pair0_ratio_in']:.2f}x")
+        print(f"    Target: start={window_stats['pair0_start_tgt']:.1f}f, ratio={window_stats['pair0_ratio_tgt']:.2f}x")
+        print(f"    Tonality: {window_stats['pair0_tonality']:.2f}")
+        print(f"  Pair 1:")
+        print(f"    Input:  start={window_stats['pair1_start_in']:.1f}f, ratio={window_stats['pair1_ratio_in']:.2f}x")
+        print(f"    Target: start={window_stats['pair1_start_tgt']:.1f}f, ratio={window_stats['pair1_ratio_tgt']:.2f}x")
+        print(f"    Tonality: {window_stats['pair1_tonality']:.2f}")
+        print(f"  Pair 2:")
+        print(f"    Input:  start={window_stats['pair2_start_in']:.1f}f, ratio={window_stats['pair2_ratio_in']:.2f}x")
+        print(f"    Target: start={window_stats['pair2_start_tgt']:.1f}f, ratio={window_stats['pair2_ratio_tgt']:.2f}x")
+        print(f"    Tonality: {window_stats['pair2_tonality']:.2f}")
     
     # Component weights if present
     if 'input_rhythm_w' in metrics:
@@ -267,15 +273,24 @@ class MetricsAccumulator:
         
         # Update window statistics from metadata
         if metadata and 'pairs' in metadata and len(metadata['pairs']) >= 3:
+            # Track separate input and target statistics
             self.total_pair0_start += metadata['pairs'][0].get('start_input_mean', 0.0)
             self.total_pair1_start += metadata['pairs'][1].get('start_input_mean', 0.0)
             self.total_pair2_start += metadata['pairs'][2].get('start_input_mean', 0.0)
+            self.total_pair0_start_tgt = getattr(self, 'total_pair0_start_tgt', 0.0) + metadata['pairs'][0].get('start_target_mean', 0.0)
+            self.total_pair1_start_tgt = getattr(self, 'total_pair1_start_tgt', 0.0) + metadata['pairs'][1].get('start_target_mean', 0.0)
+            self.total_pair2_start_tgt = getattr(self, 'total_pair2_start_tgt', 0.0) + metadata['pairs'][2].get('start_target_mean', 0.0)
+            
             self.total_pair0_ratio += metadata['pairs'][0].get('ratio_input_mean', 0.0)
             self.total_pair1_ratio += metadata['pairs'][1].get('ratio_input_mean', 0.0)
             self.total_pair2_ratio += metadata['pairs'][2].get('ratio_input_mean', 0.0)
-            self.total_pair0_tonality += metadata['pairs'][0].get('tonality_input_mean', 0.0)
-            self.total_pair1_tonality += metadata['pairs'][1].get('tonality_input_mean', 0.0)
-            self.total_pair2_tonality += metadata['pairs'][2].get('tonality_input_mean', 0.0)
+            self.total_pair0_ratio_tgt = getattr(self, 'total_pair0_ratio_tgt', 0.0) + metadata['pairs'][0].get('ratio_target_mean', 0.0)
+            self.total_pair1_ratio_tgt = getattr(self, 'total_pair1_ratio_tgt', 0.0) + metadata['pairs'][1].get('ratio_target_mean', 0.0)
+            self.total_pair2_ratio_tgt = getattr(self, 'total_pair2_ratio_tgt', 0.0) + metadata['pairs'][2].get('ratio_target_mean', 0.0)
+            
+            self.total_pair0_tonality += metadata['pairs'][0].get('tonality_strength_mean', 0.0)
+            self.total_pair1_tonality += metadata['pairs'][1].get('tonality_strength_mean', 0.0)
+            self.total_pair2_tonality += metadata['pairs'][2].get('tonality_strength_mean', 0.0)
         
         # Update compositional agent stats from metadata
         if metadata and 'compositional_stats' in metadata:
@@ -333,12 +348,18 @@ class MetricsAccumulator:
         n = self.num_batches
         
         return {
-            'pair0_start': self.total_pair0_start / n,
-            'pair1_start': self.total_pair1_start / n,
-            'pair2_start': self.total_pair2_start / n,
-            'pair0_ratio': self.total_pair0_ratio / n,
-            'pair1_ratio': self.total_pair1_ratio / n,
-            'pair2_ratio': self.total_pair2_ratio / n,
+            'pair0_start_in': self.total_pair0_start / n,
+            'pair1_start_in': self.total_pair1_start / n,
+            'pair2_start_in': self.total_pair2_start / n,
+            'pair0_start_tgt': getattr(self, 'total_pair0_start_tgt', 0.0) / n,
+            'pair1_start_tgt': getattr(self, 'total_pair1_start_tgt', 0.0) / n,
+            'pair2_start_tgt': getattr(self, 'total_pair2_start_tgt', 0.0) / n,
+            'pair0_ratio_in': self.total_pair0_ratio / n,
+            'pair1_ratio_in': self.total_pair1_ratio / n,
+            'pair2_ratio_in': self.total_pair2_ratio / n,
+            'pair0_ratio_tgt': getattr(self, 'total_pair0_ratio_tgt', 0.0) / n,
+            'pair1_ratio_tgt': getattr(self, 'total_pair1_ratio_tgt', 0.0) / n,
+            'pair2_ratio_tgt': getattr(self, 'total_pair2_ratio_tgt', 0.0) / n,
             'pair0_tonality': self.total_pair0_tonality / n,
             'pair1_tonality': self.total_pair1_tonality / n,
             'pair2_tonality': self.total_pair2_tonality / n,
