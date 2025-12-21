@@ -18,6 +18,7 @@ os.environ['GIT_PYTHON_REFRESH'] = 'quiet'
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
