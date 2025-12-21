@@ -39,6 +39,13 @@ from adaptive_window_agent import AdaptiveWindowCreativeAgent
 from audio_discriminator import AudioDiscriminator, discriminator_loss, generator_loss, roll_targets
 from dataset_wav_pairs_24sec import AudioPairsDataset24sec, collate_fn
 from training.losses import rms_loss, stft_loss, mel_loss, combined_loss, spectral_outlier_penalty
+from training.debug_utils import (
+    debug_gradients, 
+    print_training_progress, 
+    print_window_selection_debug,
+    print_epoch_summary,
+    MetricsAccumulator
+)
 
 
 def setup_ddp(rank, world_size):
@@ -139,48 +146,14 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
     if discriminator is not None:
         discriminator.train()
     
-    # Loss accumulators
-    total_loss = 0.0
-    total_rms_input = 0.0
-    total_rms_target = 0.0
-    total_spectral = 0.0
-    total_mel = 0.0
-    total_corr_penalty = 0.0
-    total_novelty = 0.0  # Mask reg loss from creative agent
-    total_balance_loss_raw = 0.0
+    # Use MetricsAccumulator instead of manual tracking
+    metrics = MetricsAccumulator()
     
-    # GAN metrics
-    total_gan_loss = 0.0
-    total_disc_loss = 0.0
-    total_disc_real_acc = 0.0
-    total_disc_fake_acc = 0.0
-    
-    # Adaptive window statistics
-    total_pair0_start = 0.0
-    total_pair1_start = 0.0
-    total_pair2_start = 0.0
-    total_pair0_ratio = 0.0
-    total_pair1_ratio = 0.0
-    total_pair2_ratio = 0.0
-    total_pair0_tonality = 0.0
-    total_pair1_tonality = 0.0
-    total_pair2_tonality = 0.0
-    
-    # Compositional agent statistics
-    total_input_rhythm_w = 0.0
-    total_input_harmony_w = 0.0
-    total_target_rhythm_w = 0.0
-    total_target_harmony_w = 0.0
-    
-    # Correlation analysis
-    total_output_input_corr = 0.0
-    total_output_target_corr = 0.0
+    # Additional metrics not in accumulator (for compatibility)
     total_complementarity = 0.0
     total_mask_overlap = 0.0
     total_input_mask_mean = 0.0
     total_target_mask_mean = 0.0
-    
-    num_batches = 0
     total_batches = len(dataloader)
     
     for batch_idx, (audio_inputs, audio_targets) in enumerate(dataloader):
@@ -331,166 +304,90 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
         loss.backward()
         
         # Gradient debugging (first batch only)
-        if batch_idx == 0 and epoch == 1 and rank == 0:
-            print(f"\n{'='*80}")
-            print(f"GRADIENT DEBUGGING (First batch, Epoch {epoch})")
-            print(f"{'='*80}")
-            total_grad_norm = 0.0
-            grad_info = []
-            for name, param in model.named_parameters():
-                if param.grad is not None:
-                    grad_norm = param.grad.norm().item()
-                    total_grad_norm += grad_norm ** 2
-                    grad_info.append((name, grad_norm, param.grad.abs().mean().item(), param.grad.abs().max().item()))
-            
-            total_grad_norm = total_grad_norm ** 0.5
-            print(f"Total gradient norm (before clipping): {total_grad_norm:.6f}")
-            
-            print("\nTop 10 parameters by gradient norm:")
-            for name, norm, mean, max_val in sorted(grad_info, key=lambda x: -x[1])[:10]:
-                print(f"  {name:50s}: norm={norm:.6f}, mean={mean:.6f}, max={max_val:.6f}")
-            
-            zero_grad = [name for name, norm, _, _ in grad_info if norm < 1e-8]
-            if zero_grad:
-                print(f"\n⚠️  WARNING: {len(zero_grad)} parameters have near-zero gradients:")
-                for name in zero_grad[:5]:
-                    print(f"    {name}")
-                if len(zero_grad) > 5:
-                    print(f"    ... and {len(zero_grad)-5} more")
-            
-            print(f"{'='*80}\n")
+        if batch_idx == 0 and epoch == 1:
+            debug_gradients(model, epoch, rank)
         
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
         
-        # Accumulate metrics
-        total_loss += loss.item()
-        total_rms_input += rms_input_val.item() if isinstance(rms_input_val, torch.Tensor) else rms_input_val
-        total_rms_target += rms_target_val.item() if isinstance(rms_target_val, torch.Tensor) else rms_target_val
-        total_spectral += spec_val.item() if isinstance(spec_val, torch.Tensor) else spec_val
-        total_mel += mel_val.item() if isinstance(mel_val, torch.Tensor) else mel_val
-        total_corr_penalty += corr_penalty_val.item() if isinstance(corr_penalty_val, torch.Tensor) else corr_penalty_val
-        total_novelty += mean_novelty_loss.item()
-        total_balance_loss_raw += balance_loss_raw if isinstance(balance_loss_raw, float) else balance_loss_raw.item()
+        # Update metrics accumulator
+        metrics.update(
+            loss=loss,
+            rms_input=rms_input_val,
+            rms_target=rms_target_val,
+            spectral=spec_val,
+            mel=mel_val,
+            corr_penalty=corr_penalty_val,
+            novelty=mean_novelty_loss,
+            balance_loss_raw=balance_loss_raw,
+            gan_loss=gan_g_loss,
+            disc_loss=disc_loss_value,
+            disc_real_acc=disc_real_acc,
+            disc_fake_acc=disc_fake_acc,
+            output_input_corr=output_input_corr,
+            output_target_corr=output_target_corr,
+            metadata=metadata
+        )
         
-        if discriminator is not None and args.gan_weight > 0:
-            total_gan_loss += gan_g_loss.item()
-            total_disc_loss += disc_loss_value.item()
-            total_disc_real_acc += disc_real_acc
-            total_disc_fake_acc += disc_fake_acc
-        
-        # Accumulate correlation metrics
-        total_output_input_corr += output_input_corr.item()
-        total_output_target_corr += output_target_corr.item()
-        
-        # Accumulate window statistics
-        if 'pairs' in metadata and len(metadata['pairs']) >= 3:
-            total_pair0_start += metadata['pairs'][0].get('start_input_mean', 0.0)
-            total_pair1_start += metadata['pairs'][1].get('start_input_mean', 0.0)
-            total_pair2_start += metadata['pairs'][2].get('start_input_mean', 0.0)
-            total_pair0_ratio += metadata['pairs'][0].get('ratio_input_mean', 0.0)
-            total_pair1_ratio += metadata['pairs'][1].get('ratio_input_mean', 0.0)
-            total_pair2_ratio += metadata['pairs'][2].get('ratio_input_mean', 0.0)
-            total_pair0_tonality += metadata['pairs'][0].get('tonality_input_mean', 0.0)
-            total_pair1_tonality += metadata['pairs'][1].get('tonality_input_mean', 0.0)
-            total_pair2_tonality += metadata['pairs'][2].get('tonality_input_mean', 0.0)
-        
-        # Accumulate compositional agent statistics
-        if 'compositional_stats' in metadata:
-            stats = metadata['compositional_stats']
-            total_input_rhythm_w += stats.get('input_rhythm_weight', 0.0)
-            total_input_harmony_w += stats.get('input_harmony_weight', 0.0)
-            total_target_rhythm_w += stats.get('target_rhythm_weight', 0.0)
-            total_target_harmony_w += stats.get('target_harmony_weight', 0.0)
-        
-        num_batches += 1
-        
-        # Progress update (rank 0 only, every 20 batches)
-        if rank == 0 and (batch_idx % 20 == 0 or batch_idx == total_batches - 1):
-            progress_pct = (batch_idx + 1) / total_batches * 100
-            print(f"Epoch {epoch}: {batch_idx+1}/{total_batches} ({progress_pct:.0f}%) - "
-                  f"loss={loss.item():.4f}, novelty={mean_novelty_loss.item():.4f}, "
-                  f"rms_in={rms_input_val if isinstance(rms_input_val, float) else rms_input_val.item():.4f}, "
-                  f"rms_tgt={rms_target_val if isinstance(rms_target_val, float) else rms_target_val.item():.4f}")
+        # Progress update
+        print_training_progress(
+            epoch, batch_idx, total_batches,
+            loss, mean_novelty_loss, rms_input_val, rms_target_val, rank
+        )
         
         # Debug: Print first batch window selection
-        if rank == 0 and batch_idx == 0 and epoch == 1:
-            print(f"\n🎯 First Batch Window Selection:")
-            if 'pairs' in metadata:
-                for i, pair in enumerate(metadata['pairs'][:3]):
-                    print(f"  Pair {i}: start={pair.get('start_input_mean', 0):.1f}f, "
-                          f"ratio={pair.get('ratio_input_mean', 0):.2f}x, "
-                          f"tonality={pair.get('tonality_input_mean', 0):.2f}")
+        if batch_idx == 0:
+            print_window_selection_debug(metadata, epoch, rank)
     
-    # Synchronize metrics across GPUs
-    avg_loss_tensor = torch.tensor([total_loss / num_batches], device=rank)
-    avg_novelty_tensor = torch.tensor([total_novelty / num_batches], device=rank)
-    avg_spectral_tensor = torch.tensor([total_spectral / num_batches], device=rank)
-    avg_mel_tensor = torch.tensor([total_mel / num_batches], device=rank)
-    avg_rms_input_tensor = torch.tensor([total_rms_input / num_batches], device=rank)
-    avg_rms_target_tensor = torch.tensor([total_rms_target / num_batches], device=rank)
-    avg_corr_penalty_tensor = torch.tensor([total_corr_penalty / num_batches], device=rank)
+    # Get averaged metrics from accumulator
+    avg_metrics = metrics.get_averages()
+    window_stats = metrics.get_window_stats()
     
-    dist.all_reduce(avg_loss_tensor, op=dist.ReduceOp.SUM)
-    dist.all_reduce(avg_novelty_tensor, op=dist.ReduceOp.SUM)
-    dist.all_reduce(avg_spectral_tensor, op=dist.ReduceOp.SUM)
-    dist.all_reduce(avg_mel_tensor, op=dist.ReduceOp.SUM)
-    dist.all_reduce(avg_rms_input_tensor, op=dist.ReduceOp.SUM)
-    dist.all_reduce(avg_rms_target_tensor, op=dist.ReduceOp.SUM)
-    dist.all_reduce(avg_corr_penalty_tensor, op=dist.ReduceOp.SUM)
-    
-    avg_loss = avg_loss_tensor.item() / world_size
-    avg_novelty = avg_novelty_tensor.item() / world_size
-    avg_spectral = avg_spectral_tensor.item() / world_size
-    avg_mel = avg_mel_tensor.item() / world_size
-    avg_rms_input = avg_rms_input_tensor.item() / world_size
-    avg_rms_target = avg_rms_target_tensor.item() / world_size
-    avg_corr_penalty = avg_corr_penalty_tensor.item() / world_size
-    
-    # Prepare return dict
-    metrics = {
-        'loss': avg_loss,
-        'novelty': avg_novelty,
-        'spectral': avg_spectral,
-        'mel': avg_mel,
-        'rms_input': avg_rms_input,
-        'rms_target': avg_rms_target,
-        'corr_penalty': avg_corr_penalty,
-        'balance_loss_raw': total_balance_loss_raw / num_batches,
-        'output_input_corr': total_output_input_corr / num_batches,
-        'output_target_corr': total_output_target_corr / num_batches,
+    # Synchronize core metrics across GPUs
+    sync_tensors = {
+        'loss': torch.tensor([avg_metrics['loss']], device=rank),
+        'novelty': torch.tensor([avg_metrics['novelty']], device=rank),
+        'spectral': torch.tensor([avg_metrics['spectral']], device=rank),
+        'mel': torch.tensor([avg_metrics['mel']], device=rank),
+        'rms_input': torch.tensor([avg_metrics['rms_input']], device=rank),
+        'rms_target': torch.tensor([avg_metrics['rms_target']], device=rank),
+        'corr_penalty': torch.tensor([avg_metrics['corr_penalty']], device=rank),
     }
+    
+    # All-reduce across GPUs
+    for tensor in sync_tensors.values():
+        dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
+    
+    # Average across world size
+    final_metrics = {
+        key: tensor.item() / world_size 
+        for key, tensor in sync_tensors.items()
+    }
+    
+    # Add other metrics (already averaged locally)
+    final_metrics.update({
+        'balance_loss_raw': avg_metrics['balance_loss'],
+        'output_input_corr': avg_metrics['output_input_corr'],
+        'output_target_corr': avg_metrics['output_target_corr'],
+    })
     
     # Add GAN metrics if applicable
     if discriminator is not None and args.gan_weight > 0:
-        metrics['gan_loss'] = total_gan_loss / num_batches
-        metrics['disc_loss'] = total_disc_loss / max(1, num_batches // args.disc_update_freq)
-        metrics['disc_real_acc'] = total_disc_real_acc / max(1, num_batches // args.disc_update_freq)
-        metrics['disc_fake_acc'] = total_disc_fake_acc / max(1, num_batches // args.disc_update_freq)
+        final_metrics['gan_loss'] = avg_metrics['gan_loss']
+        final_metrics['disc_loss'] = avg_metrics['disc_loss']
+        final_metrics['disc_real_acc'] = avg_metrics['disc_real_acc']
+        final_metrics['disc_fake_acc'] = avg_metrics['disc_fake_acc']
     
-    # Add window stats
-    if num_batches > 0:
-        metrics['window_stats'] = {
-            'pair0_start': total_pair0_start / num_batches,
-            'pair1_start': total_pair1_start / num_batches,
-            'pair2_start': total_pair2_start / num_batches,
-            'pair0_ratio': total_pair0_ratio / num_batches,
-            'pair1_ratio': total_pair1_ratio / num_batches,
-            'pair2_ratio': total_pair2_ratio / num_batches,
-            'pair0_tonality': total_pair0_tonality / num_batches,
-            'pair1_tonality': total_pair1_tonality / num_batches,
-            'pair2_tonality': total_pair2_tonality / num_batches,
-        }
-        
-        # Add compositional stats
-        metrics['component_stats'] = {
-            'input_rhythm': total_input_rhythm_w / num_batches,
-            'input_harmony': total_input_harmony_w / num_batches,
-            'target_rhythm': total_target_rhythm_w / num_batches,
-            'target_harmony': total_target_harmony_w / num_batches,
-        }
+    # Add component weights
+    final_metrics['input_rhythm_w'] = avg_metrics['input_rhythm_w']
+    final_metrics['input_harmony_w'] = avg_metrics['input_harmony_w']
+    final_metrics['target_rhythm_w'] = avg_metrics['target_rhythm_w']
+    final_metrics['target_harmony_w'] = avg_metrics['target_harmony_w']
     
-    return metrics
+    # Print epoch summary
+    print_epoch_summary(epoch, final_metrics, window_stats, rank)
+    
+    return final_metrics
 
 
 def validate(model, dataloader, encodec_model, rank, world_size, args):
