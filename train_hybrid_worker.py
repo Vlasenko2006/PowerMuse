@@ -216,17 +216,18 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
         # We need to upsample back to 1200 frames for consistent decoding
         
         # CRITICAL: Must upsample BEFORE averaging, not after
-        # Use simple repeat + interpolate for robustness
+        # Use F.interpolate with align_corners=False for upsampling
         outputs_upsampled = []
         for output in outputs_list:
-            B, D, T = output.shape
-            # Method: Reshape and use adaptive_avg_pool1d for reliable upsampling
-            # This is more explicit than interpolate
-            output_reshaped = output.reshape(B * D, 1, T)  # [B*D, 1, 800]
-            output_upsampled = torch.nn.functional.adaptive_avg_pool1d(
-                output_reshaped, output_size=1200
-            )  # [B*D, 1, 1200]
-            output_1200 = output_upsampled.reshape(B, D, 1200)  # [B, 128, 1200]
+            # Interpolate requires 3D input [N, C, L] for mode='linear'
+            # Our output is already [B, 128, 800] which matches this format
+            # Upsample from 800 to 1200 frames (factor of 1.5x)
+            output_1200 = torch.nn.functional.interpolate(
+                output,  # [B, 128, 800]
+                size=1200,
+                mode='linear',
+                align_corners=False
+            )  # [B, 128, 1200]
             outputs_upsampled.append(output_1200)
         
         # Average the 3 upsampled outputs
@@ -507,13 +508,13 @@ def validate(model, dataloader, encodec_model, rank, world_size, args):
             # Average outputs with upsampling
             outputs_upsampled = []
             for output in outputs_list:
-                B, D, T = output.shape
-                # Use adaptive pooling for robust upsampling
-                output_reshaped = output.reshape(B * D, 1, T)
-                output_upsampled = torch.nn.functional.adaptive_avg_pool1d(
-                    output_reshaped, output_size=1200
-                )
-                output_1200 = output_upsampled.reshape(B, D, 1200)
+                # Upsample from 800 to 1200 frames using interpolate
+                output_1200 = torch.nn.functional.interpolate(
+                    output,  # [B, 128, 800]
+                    size=1200,
+                    mode='linear',
+                    align_corners=False
+                )  # [B, 128, 1200]
                 outputs_upsampled.append(output_1200)
             encoded_output = torch.stack(outputs_upsampled, dim=0).mean(dim=0)
             mean_novelty_loss = torch.stack(novelty_losses).mean()
