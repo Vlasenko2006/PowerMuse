@@ -346,8 +346,8 @@ def print_results(metrics, epoch):
 
 def main():
     parser = argparse.ArgumentParser(description='Validate hybrid adaptive window model')
-    parser.add_argument('--checkpoint', type=str, required=True, help='Path to checkpoint')
-    parser.add_argument('--dataset', type=str, default='dataset_pairs_wav', help='Dataset directory')
+    parser.add_argument('--checkpoint', type=str, default='checkpoints_24/hybrid_epoch_30.pt', help='Path to checkpoint')
+    parser.add_argument('--dataset', type=str, default='dataset_pairs_wav_24sec/val', help='Dataset directory')
     parser.add_argument('--batch_size', type=int, default=8, help='Batch size')
     parser.add_argument('--num_samples', type=int, default=5, help='Number of audio samples to generate')
     parser.add_argument('--output_dir', type=str, default='validation_samples', help='Output directory for samples')
@@ -364,7 +364,7 @@ def main():
     # Load validation dataset
     print(f"\nLoading validation dataset from: {args.dataset}")
     val_dataset = WavPairsDataset(
-        pairs_dir=Path(args.dataset) / 'val',
+        pairs_dir=Path(args.dataset),
         duration=24.0,
         sample_rate=24000
     )
