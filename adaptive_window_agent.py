@@ -442,7 +442,8 @@ class AdaptiveWindowCreativeAgent(nn.Module):
         # Collect metadata for logging
         metadata = {
             'num_pairs': self.num_pairs,
-            'pairs': []
+            'pairs': [],
+            'window_params': window_params  # Raw params for reconstruction loss
         }
         for pair_idx, params in enumerate(window_params):
             pair_meta = {

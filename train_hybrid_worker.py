@@ -235,6 +235,77 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
         # Add novelty/mask regularization loss
         loss = loss + args.mask_reg_weight * mean_novelty_loss
         
+        # ============ NEW: Ratio Supervision ============
+        # 1. Ratio diversity loss - encourage different ratios across pairs
+        if 'window_params' in metadata:
+            all_ratios_input = []
+            all_ratios_target = []
+            for params in metadata['window_params']:
+                all_ratios_input.append(params['ratio_input'])
+                all_ratios_target.append(params['ratio_target'])
+            
+            # Stack all ratios: [num_pairs, B]
+            ratios_input_stacked = torch.stack(all_ratios_input, dim=0)  # [3, B]
+            ratios_target_stacked = torch.stack(all_ratios_target, dim=0)  # [3, B]
+            
+            # Encourage variance across pairs (averaged over batch)
+            ratio_variance_input = torch.var(ratios_input_stacked, dim=0).mean()  # Variance across pairs
+            ratio_variance_target = torch.var(ratios_target_stacked, dim=0).mean()
+            
+            # Negative variance loss = encourage higher variance
+            ratio_diversity_loss = -(ratio_variance_input + ratio_variance_target)
+            loss = loss + 0.1 * ratio_diversity_loss  # Weight: 0.1
+        else:
+            ratio_diversity_loss = torch.tensor(0.0, device=rank)
+        
+        # 2. Reconstruction loss - compare output to ORIGINAL uncompressed windows
+        reconstruction_losses = []
+        for idx, (encoded_output, params) in enumerate(zip(outputs_list, metadata['window_params'])):
+            # Decode output
+            with torch.no_grad():
+                output_audio_decoded = encodec_model.decoder(encoded_output.detach())  # [B, 1, 256000]
+            
+            # Extract ORIGINAL windows (before compression) from 24-sec audio
+            # Use the same start positions predicted by WindowSelector
+            original_input_windows = []
+            original_target_windows = []
+            
+            for b in range(audio_inputs.shape[0]):
+                start_in = int(params['start_input'][b].item())
+                start_tgt = int(params['start_target'][b].item())
+                
+                # Extract 800 frames from ENCODED (will decode to 256k samples)
+                # This is the ORIGINAL window before compression
+                start_in = max(0, min(start_in, encoded_inputs.shape[2] - 800))
+                start_tgt = max(0, min(start_tgt, encoded_targets.shape[2] - 800))
+                
+                orig_in = encoded_inputs[b:b+1, :, start_in:start_in+800]  # [1, 128, 800]
+                orig_tgt = encoded_targets[b:b+1, :, start_tgt:start_tgt+800]  # [1, 128, 800]
+                
+                original_input_windows.append(orig_in)
+                original_target_windows.append(orig_tgt)
+            
+            # Decode original windows
+            orig_in_batch = torch.cat(original_input_windows, dim=0)  # [B, 128, 800]
+            orig_tgt_batch = torch.cat(original_target_windows, dim=0)  # [B, 128, 800]
+            
+            with torch.no_grad():
+                orig_in_audio = encodec_model.decoder(orig_in_batch.detach())  # [B, 1, 256000]
+                orig_tgt_audio = encodec_model.decoder(orig_tgt_batch.detach())  # [B, 1, 256000]
+            
+            # Compute reconstruction loss (should be close to original)
+            recon_loss_input = F.mse_loss(output_audio_decoded, orig_in_audio)
+            recon_loss_target = F.mse_loss(output_audio_decoded, orig_tgt_audio)
+            
+            # Average input and target reconstruction
+            recon_loss = (recon_loss_input + recon_loss_target) / 2
+            reconstruction_losses.append(recon_loss)
+        
+        # Average reconstruction loss across pairs
+        mean_reconstruction_loss = torch.stack(reconstruction_losses).mean()
+        loss = loss + 0.05 * mean_reconstruction_loss  # Weight: 0.05
+        # ============ END: Ratio Supervision ============
+        
         # Average the 3 encoded outputs for GAN training and other downstream uses
         encoded_output_avg = torch.stack(outputs_list, dim=0).mean(dim=0)  # [B, 128, 800]
         
@@ -318,6 +389,8 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
             rms_target=rms_target_val,
             spectral=spec_val,
             mel=mel_val,
+            ratio_diversity=ratio_diversity_loss,
+            reconstruction=mean_reconstruction_loss,
             corr_penalty=corr_penalty_val,
             novelty=mean_novelty_loss,
             balance_loss_raw=balance_loss_raw,

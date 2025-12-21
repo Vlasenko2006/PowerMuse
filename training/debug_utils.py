@@ -143,6 +143,12 @@ def print_epoch_summary(epoch, metrics, window_stats, rank):
     print(f"Novelty:       {metrics['novelty']:.6f}")
     print(f"Corr Penalty:  {metrics['corr_penalty']:.6f}")
     
+    # NEW: Ratio supervision losses
+    if 'ratio_diversity' in metrics:
+        print(f"\nRatio Supervision:")
+        print(f"  Ratio Diversity:   {metrics['ratio_diversity']:.6f}")
+        print(f"  Reconstruction:    {metrics['reconstruction']:.6f}")
+    
     # Balance loss if present
     if 'balance_loss' in metrics and metrics['balance_loss'] > 0:
         print(f"Balance Loss:  {metrics['balance_loss']:.6f}")
@@ -211,6 +217,10 @@ class MetricsAccumulator:
         self.total_output_input_corr = 0.0
         self.total_output_target_corr = 0.0
         
+        # NEW: Ratio supervision metrics
+        self.total_ratio_diversity = 0.0
+        self.total_reconstruction = 0.0
+        
         # Window selection stats
         self.total_pair0_start = 0.0
         self.total_pair1_start = 0.0
@@ -233,7 +243,8 @@ class MetricsAccumulator:
     def update(self, loss, rms_input, rms_target, spectral, mel, corr_penalty,
                novelty, balance_loss_raw=0.0, gan_loss=0.0, disc_loss=0.0,
                disc_real_acc=0.0, disc_fake_acc=0.0, output_input_corr=0.0,
-               output_target_corr=0.0, metadata=None):
+               output_target_corr=0.0, ratio_diversity=0.0, reconstruction=0.0,
+               metadata=None):
         """
         Update accumulated metrics with current batch values.
         
@@ -252,6 +263,8 @@ class MetricsAccumulator:
             disc_fake_acc: Discriminator fake accuracy (optional)
             output_input_corr: Output-input correlation (optional)
             output_target_corr: Output-target correlation (optional)
+            ratio_diversity: Ratio diversity loss (optional)
+            reconstruction: Reconstruction loss (optional)
             metadata: Metadata dict with window/component stats (optional)
         """
         # Convert tensors to floats
@@ -271,6 +284,10 @@ class MetricsAccumulator:
         
         self.total_output_input_corr += output_input_corr.item() if isinstance(output_input_corr, torch.Tensor) else output_input_corr
         self.total_output_target_corr += output_target_corr.item() if isinstance(output_target_corr, torch.Tensor) else output_target_corr
+        
+        # NEW: Ratio supervision metrics
+        self.total_ratio_diversity += ratio_diversity.item() if isinstance(ratio_diversity, torch.Tensor) else ratio_diversity
+        self.total_reconstruction += reconstruction.item() if isinstance(reconstruction, torch.Tensor) else reconstruction
         
         # Update window statistics from metadata
         if metadata and 'pairs' in metadata and len(metadata['pairs']) >= 3:
@@ -327,6 +344,11 @@ class MetricsAccumulator:
             'gan_loss': self.total_gan_loss / n,
             'disc_loss': self.total_disc_loss / n,
             'disc_real_acc': self.total_disc_real_acc / n,
+            'disc_fake_acc': self.total_disc_fake_acc / n,
+            'output_input_corr': self.total_output_input_corr / n,
+            'output_target_corr': self.total_output_target_corr / n,
+            'ratio_diversity': self.total_ratio_diversity / n,
+            'reconstruction': self.total_reconstruction / n,
             'disc_fake_acc': self.total_disc_fake_acc / n,
             'output_input_corr': self.total_output_input_corr / n,
             'output_target_corr': self.total_output_target_corr / n,
