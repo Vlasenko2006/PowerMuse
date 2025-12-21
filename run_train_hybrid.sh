@@ -13,6 +13,11 @@ echo "=================================================="
 # Navigate to project directory
 cd /work/gg0302/g260141/Jingle_D
 
+# Pull latest changes
+echo "Pulling latest changes from git..."
+git pull origin adaptive-window-selection
+echo ""
+
 # Create logs and checkpoint directories
 mkdir -p logs
 mkdir -p checkpoints_hybrid
