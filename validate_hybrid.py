@@ -18,6 +18,9 @@ import numpy as np
 from pathlib import Path
 import argparse
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('Agg')  # Non-interactive backend
 
 # Import model and utilities
 from adaptive_window_agent import AdaptiveWindowCreativeAgent
@@ -295,6 +298,97 @@ def compute_metrics(model, encodec_model, dataloader, device, args, max_batches=
     return metrics
 
 
+def visualize_waveforms(input_audio, target_audio, output_audio, output_path, sample_rate=24000):
+    """Visualize input, target, and output waveforms"""
+    duration_input = len(input_audio) / sample_rate
+    duration_target = len(target_audio) / sample_rate
+    duration_output = len(output_audio) / sample_rate
+    
+    time_input = np.linspace(0, duration_input, len(input_audio))
+    time_target = np.linspace(0, duration_target, len(target_audio))
+    time_output = np.linspace(0, duration_output, len(output_audio))
+    
+    fig, axes = plt.subplots(3, 1, figsize=(15, 10))
+    
+    # Plot input
+    axes[0].plot(time_input, input_audio, color='blue', linewidth=0.5, alpha=0.7)
+    axes[0].set_title('Input Audio', fontsize=14, fontweight='bold')
+    axes[0].set_ylabel('Amplitude', fontsize=12)
+    axes[0].set_xlim(0, duration_input)
+    axes[0].set_ylim(-1.0, 1.0)
+    axes[0].grid(True, alpha=0.3)
+    axes[0].axhline(y=0, color='k', linestyle='-', linewidth=0.5, alpha=0.3)
+    
+    # Plot target
+    axes[1].plot(time_target, target_audio, color='green', linewidth=0.5, alpha=0.7)
+    axes[1].set_title('Target Audio (Ground Truth)', fontsize=14, fontweight='bold')
+    axes[1].set_ylabel('Amplitude', fontsize=12)
+    axes[1].set_xlim(0, duration_target)
+    axes[1].set_ylim(-1.0, 1.0)
+    axes[1].grid(True, alpha=0.3)
+    axes[1].axhline(y=0, color='k', linestyle='-', linewidth=0.5, alpha=0.3)
+    
+    # Plot output
+    axes[2].plot(time_output, output_audio, color='red', linewidth=0.5, alpha=0.7)
+    axes[2].set_title('Model Output', fontsize=14, fontweight='bold')
+    axes[2].set_xlabel('Time (seconds)', fontsize=12)
+    axes[2].set_ylabel('Amplitude', fontsize=12)
+    axes[2].set_xlim(0, duration_output)
+    axes[2].set_ylim(-1.0, 1.0)
+    axes[2].grid(True, alpha=0.3)
+    axes[2].axhline(y=0, color='k', linestyle='-', linewidth=0.5, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.close()
+
+
+def visualize_spectrograms(input_audio, target_audio, output_audio, output_path, sample_rate=24000):
+    """Visualize spectrograms of input, target, and output audio"""
+    fig, axes = plt.subplots(3, 1, figsize=(15, 10))
+    
+    n_fft = 2048
+    hop_length = 512
+    
+    # Input spectrogram
+    D_input = np.abs(plt.specgram(input_audio, Fs=sample_rate, NFFT=n_fft, 
+                                    noverlap=n_fft-hop_length, cmap='viridis')[0])
+    axes[0].clear()
+    im0 = axes[0].imshow(10 * np.log10(D_input + 1e-10), aspect='auto', origin='lower', 
+                         cmap='viridis', extent=[0, len(input_audio)/sample_rate, 0, sample_rate/2])
+    axes[0].set_title('Input Audio Spectrogram', fontsize=14, fontweight='bold')
+    axes[0].set_ylabel('Frequency (Hz)', fontsize=12)
+    axes[0].set_ylim(0, 8000)
+    plt.colorbar(im0, ax=axes[0], label='Power (dB)')
+    
+    # Target spectrogram
+    D_target = np.abs(plt.specgram(target_audio, Fs=sample_rate, NFFT=n_fft, 
+                                     noverlap=n_fft-hop_length, cmap='viridis')[0])
+    axes[1].clear()
+    im1 = axes[1].imshow(10 * np.log10(D_target + 1e-10), aspect='auto', origin='lower', 
+                         cmap='viridis', extent=[0, len(target_audio)/sample_rate, 0, sample_rate/2])
+    axes[1].set_title('Target Audio Spectrogram (Ground Truth)', fontsize=14, fontweight='bold')
+    axes[1].set_ylabel('Frequency (Hz)', fontsize=12)
+    axes[1].set_ylim(0, 8000)
+    plt.colorbar(im1, ax=axes[1], label='Power (dB)')
+    
+    # Output spectrogram
+    D_output = np.abs(plt.specgram(output_audio, Fs=sample_rate, NFFT=n_fft, 
+                                   noverlap=n_fft-hop_length, cmap='viridis')[0])
+    axes[2].clear()
+    im2 = axes[2].imshow(10 * np.log10(D_output + 1e-10), aspect='auto', origin='lower', 
+                         cmap='viridis', extent=[0, len(output_audio)/sample_rate, 0, sample_rate/2])
+    axes[2].set_title('Model Output Spectrogram', fontsize=14, fontweight='bold')
+    axes[2].set_xlabel('Time (seconds)', fontsize=12)
+    axes[2].set_ylabel('Frequency (Hz)', fontsize=12)
+    axes[2].set_ylim(0, 8000)
+    plt.colorbar(im2, ax=axes[2], label='Power (dB)')
+    
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.close()
+
+
 def generate_samples(model, encodec_model, dataloader, device, output_dir, num_samples=5):
     """Generate and save audio samples"""
     print(f"\n" + "="*80)
@@ -332,7 +426,7 @@ def generate_samples(model, encodec_model, dataloader, device, output_dir, num_s
             # Decode input for saving
             audio_input = encodec_model.decoder(encoded_input)
             
-            # Decode all 3 pairs
+            # Decode all 3 pairs and generate visualizations
             for pair_idx, encoded_output in enumerate(outputs_list):
                 output_audio = encodec_model.decoder(encoded_output)
                 
@@ -341,10 +435,22 @@ def generate_samples(model, encodec_model, dataloader, device, output_dir, num_s
                 target_np = audio_target.squeeze().cpu().numpy()
                 output_np = output_audio.squeeze().cpu().numpy()
                 
-                # Save
+                # Save audio files
                 sf.write(output_dir / f"sample_{sample_idx:03d}_pair_{pair_idx}_input.wav", input_np, 24000)
                 sf.write(output_dir / f"sample_{sample_idx:03d}_pair_{pair_idx}_target.wav", target_np, 24000)
                 sf.write(output_dir / f"sample_{sample_idx:03d}_pair_{pair_idx}_output.wav", output_np, 24000)
+                
+                # Generate waveform visualization
+                visualize_waveforms(
+                    input_np, target_np, output_np,
+                    output_dir / f"sample_{sample_idx:03d}_pair_{pair_idx}_waveforms.png"
+                )
+                
+                # Generate spectrogram visualization
+                visualize_spectrograms(
+                    input_np, target_np, output_np,
+                    output_dir / f"sample_{sample_idx:03d}_pair_{pair_idx}_spectrograms.png"
+                )
             
             # Print window info
             print(f"\nSample {sample_idx}:")
