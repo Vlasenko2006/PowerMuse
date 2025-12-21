@@ -63,7 +63,7 @@ def debug_gradients(model, epoch, rank):
 def print_training_progress(epoch, batch_idx, total_batches, loss, novelty_loss, 
                             rms_input, rms_target, rank, print_every=20):
     """
-    Print training progress periodically with in-place updates.
+    Print training progress periodically.
     
     Args:
         epoch: Current epoch number
@@ -88,12 +88,10 @@ def print_training_progress(epoch, batch_idx, total_batches, loss, novelty_loss,
         rms_in_val = rms_input.item() if isinstance(rms_input, torch.Tensor) else rms_input
         rms_tgt_val = rms_target.item() if isinstance(rms_target, torch.Tensor) else rms_target
         
-        # Use \r to update in place, add newline at end of epoch
-        end_char = '\n' if batch_idx == total_batches - 1 else '\r'
+        # Normal cascade printing (each update on new line)
         print(f"Epoch {epoch}: {batch_idx+1}/{total_batches} ({progress_pct:.0f}%) - "
               f"loss={loss_val:.4f}, novelty={novelty_val:.4f}, "
-              f"rms_in={rms_in_val:.4f}, rms_tgt={rms_tgt_val:.4f}", 
-              end=end_char, flush=True)
+              f"rms_in={rms_in_val:.4f}, rms_tgt={rms_tgt_val:.4f}")
 
 
 def print_window_selection_debug(metadata, epoch, rank):
