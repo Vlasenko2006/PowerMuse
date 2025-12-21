@@ -388,8 +388,8 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
         optimizer.zero_grad()
         loss.backward()
         
-        # Gradient debugging (first batch only)
-        if batch_idx == 0 and epoch == 1:
+        # Gradient debugging (first batch of each epoch)
+        if batch_idx == 0:
             debug_gradients(model, epoch, rank)
         
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
