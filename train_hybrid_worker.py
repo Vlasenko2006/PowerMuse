@@ -211,36 +211,58 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
         # Returns: List of 3 outputs [B, 128, 800], List of 3 novelty losses, metadata
         outputs_list, novelty_losses, metadata = model(encoded_inputs, encoded_targets)
         
-        # The agent processes 3 different 16-second windows internally
-        # Each output is [B, 128, 800] (16 seconds compressed = 384k samples decoded)
-        # We average the 3 outputs and compare to center 16 seconds of target
+        # The agent creates 3 pairs, each processed independently
+        # For each pair: decode output, extract matching 16-sec segments, compute loss
+        # Then average all losses (as in the backup version)
         
-        # Average the 3 outputs directly (no upsampling needed)
-        encoded_output = torch.stack(outputs_list, dim=0).mean(dim=0)  # [B, 128, 800]
+        pair_losses = []
+        pair_rms_input = []
+        pair_rms_target = []
+        pair_spectral = []
+        pair_mel = []
+        pair_corr_penalty = []
+        
+        for idx, encoded_output in enumerate(outputs_list):
+            # Decode this pair's output [B, 128, 800] → [B, 1, 384000] (16 sec)
+            with torch.no_grad():
+                output_audio = encodec_model.decoder(encoded_output.detach())
+            
+            # Extract center 16 seconds from input and target to match output length
+            # Input/target are 576000 samples (24 sec), output is 384000 samples (16 sec)
+            input_16sec = audio_inputs[:, :, 96000:480000]  # [B, 1, 384000]
+            target_16sec = original_targets[:, :, 96000:480000]  # [B, 1, 384000]
+            
+            # Compute loss for this pair
+            pair_loss, rms_in, rms_tgt, spec, mel, corr = combined_loss(
+                output_audio, input_16sec, target_16sec,
+                args.loss_weight_input, args.loss_weight_target,
+                args.loss_weight_spectral, args.loss_weight_mel,
+                weight_correlation=args.corr_weight
+            )
+            
+            pair_losses.append(pair_loss)
+            pair_rms_input.append(rms_in)
+            pair_rms_target.append(rms_tgt)
+            pair_spectral.append(spec)
+            pair_mel.append(mel)
+            pair_corr_penalty.append(corr)
+        
+        # Average losses across all 3 pairs
+        loss = torch.stack(pair_losses).mean()
+        rms_input_val = torch.stack([torch.tensor(v) if not isinstance(v, torch.Tensor) else v for v in pair_rms_input]).mean()
+        rms_target_val = torch.stack([torch.tensor(v) if not isinstance(v, torch.Tensor) else v for v in pair_rms_target]).mean()
+        spec_val = torch.stack([torch.tensor(v) if not isinstance(v, torch.Tensor) else v for v in pair_spectral]).mean()
+        mel_val = torch.stack([torch.tensor(v) if not isinstance(v, torch.Tensor) else v for v in pair_mel]).mean()
+        corr_penalty_val = torch.stack([torch.tensor(v) if not isinstance(v, torch.Tensor) else v for v in pair_corr_penalty]).mean()
         
         # Average novelty losses
         mean_novelty_loss = torch.stack(novelty_losses).mean()
         
-        # Decode to audio space (with no_grad to prevent RNN backward error)
-        with torch.no_grad():
-            output_audio = encodec_model.decoder(encoded_output.detach())  # [B, 1, 384000] (16 sec)
-        
-        # For loss computation, extract center 16 seconds from input and target
-        # Input/target are 576000 samples (24 sec), output is 384000 samples (16 sec)
-        # Center crop: skip first 96000 samples (4 sec), take next 384000 (16 sec)
-        input_16sec = audio_inputs[:, :, 96000:480000]  # [B, 1, 384000]
-        target_16sec = original_targets[:, :, 96000:480000]  # [B, 1, 384000]
-        
-        # Combined loss with all components
-        loss, rms_input_val, rms_target_val, spec_val, mel_val, corr_penalty_val = combined_loss(
-            output_audio, input_16sec, target_16sec,  # All are 16-second (384k samples)
-            args.loss_weight_input, args.loss_weight_target,
-            args.loss_weight_spectral, args.loss_weight_mel,
-            weight_correlation=args.corr_weight
-        )
-        
         # Add novelty/mask regularization loss
         loss = loss + args.mask_reg_weight * mean_novelty_loss
+        
+        # Average the 3 encoded outputs for GAN training and other downstream uses
+        encoded_output_avg = torch.stack(outputs_list, dim=0).mean(dim=0)  # [B, 128, 800]
         
         # Extract balance loss from metadata (if creative agent provides it)
         balance_loss_raw = 0.0
@@ -248,9 +270,15 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
             balance_loss_raw = metadata['balance_loss']
             loss = loss + args.balance_loss_weight * balance_loss_raw
         
+        # Decode first output for spectral penalty, correlation analysis, and GAN training
+        with torch.no_grad():
+            output_audio_first = encodec_model.decoder(outputs_list[0].detach())  # [B, 1, 384000]
+        input_16sec = audio_inputs[:, :, 96000:480000]
+        target_16sec = original_targets[:, :, 96000:480000]
+        
         # Spectral outlier penalty
         spectral_penalty = spectral_outlier_penalty(
-            output_audio,
+            output_audio_first,
             sample_rate=24000,
             freq_bands=[(1800, 2200), (3800, 4200), (5800, 6200)]
         )
@@ -258,9 +286,9 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
         
         # Compute correlation analysis (output vs input/target)
         with torch.no_grad():
-            output_flat = output_audio.reshape(-1)
-            input_flat = input_16sec.reshape(-1)  # Use 16-sec input
-            target_flat = target_16sec.reshape(-1)  # Use 16-sec target
+            output_flat = output_audio_first.reshape(-1)
+            input_flat = input_16sec.reshape(-1)
+            target_flat = target_16sec.reshape(-1)
             
             # Correlations
             output_input_corr = torch.corrcoef(torch.stack([output_flat, input_flat]))[0, 1]
@@ -282,7 +310,7 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
                 real_logits = discriminator(real_samples)
                 
                 # Fake samples: use averaged output (detach from generator)
-                fake_samples = encoded_output.detach()
+                fake_samples = encoded_output_avg.detach()
                 fake_logits = discriminator(fake_samples)
                 
                 # Discriminator loss
@@ -294,7 +322,7 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
                 disc_loss_value = disc_loss.detach()
             
             # Generator adversarial loss
-            fake_logits_for_gen = discriminator(encoded_output)
+            fake_logits_for_gen = discriminator(encoded_output_avg)
             gan_g_loss = generator_loss(fake_logits_for_gen)
             loss = loss + args.gan_weight * gan_g_loss
         
@@ -495,32 +523,52 @@ def validate(model, dataloader, encodec_model, rank, world_size, args):
             # Forward
             outputs_list, novelty_losses, metadata = model(encoded_inputs, encoded_targets)
             
-            # Average outputs (no upsampling - outputs are 16 seconds)
-            encoded_output = torch.stack(outputs_list, dim=0).mean(dim=0)  # [B, 128, 800]
+            # Compute loss for each of the 3 pairs and average
+            pair_losses = []
+            pair_rms_input = []
+            pair_rms_target = []
+            pair_spectral = []
+            pair_mel = []
+            
+            for idx, encoded_output in enumerate(outputs_list):
+                # Decode this pair's output
+                output_audio = encodec_model.decoder(encoded_output.detach())  # [B, 1, 384000]
+                
+                # Extract center 16 seconds from input and target
+                input_16sec = audio_inputs[:, :, 96000:480000]
+                target_16sec = audio_targets[:, :, 96000:480000]
+                
+                # Compute loss for this pair
+                pair_loss, rms_in, rms_tgt, spec, mel, corr = combined_loss(
+                    output_audio, input_16sec, target_16sec,
+                    args.loss_weight_input, args.loss_weight_target,
+                    args.loss_weight_spectral, args.loss_weight_mel,
+                    weight_correlation=0.0
+                )
+                
+                pair_losses.append(pair_loss)
+                pair_rms_input.append(rms_in)
+                pair_rms_target.append(rms_tgt)
+                pair_spectral.append(spec)
+                pair_mel.append(mel)
+            
+            # Average losses across all 3 pairs
+            loss = torch.stack(pair_losses).mean()
+            rms_input_val = torch.stack([torch.tensor(v) if not isinstance(v, torch.Tensor) else v for v in pair_rms_input]).mean()
+            rms_target_val = torch.stack([torch.tensor(v) if not isinstance(v, torch.Tensor) else v for v in pair_rms_target]).mean()
+            spec_val = torch.stack([torch.tensor(v) if not isinstance(v, torch.Tensor) else v for v in pair_spectral]).mean()
+            mel_val = torch.stack([torch.tensor(v) if not isinstance(v, torch.Tensor) else v for v in pair_mel]).mean()
+            
             mean_novelty_loss = torch.stack(novelty_losses).mean()
-            
-            # Decode
-            output_audio = encodec_model.decoder(encoded_output.detach())  # [B, 1, 384000] (16 sec)
-            
-            # Extract center 16 seconds from input and target to match output
-            input_16sec = audio_inputs[:, :, 96000:480000]  # [B, 1, 384000]
-            target_16sec = audio_targets[:, :, 96000:480000]  # [B, 1, 384000]
-            
-            # Loss
-            loss, rms_input_val, rms_target_val, spec_val, mel_val, corr_val = combined_loss(
-                output_audio, input_16sec, target_16sec,  # All are 16-second
-                args.loss_weight_input, args.loss_weight_target,
-                args.loss_weight_spectral, args.loss_weight_mel,
-                weight_correlation=0.0
-            )
             
             loss = loss + args.mask_reg_weight * mean_novelty_loss
             
-            # Store first sample (use 16-second segments for consistency)
+            # Store first sample (decode first output for visualization)
             if batch_idx == 0:
-                first_input_audio = input_16sec[0].cpu()  # Use 16-sec input
-                first_target_audio = target_16sec[0].cpu()  # Use 16-sec target
-                first_output_audio = output_audio[0].cpu()
+                first_output_decoded = encodec_model.decoder(outputs_list[0][0:1].detach())  # First sample, first output
+                first_input_audio = audio_inputs[0:1, :, 96000:480000].cpu()
+                first_target_audio = audio_targets[0:1, :, 96000:480000].cpu()
+                first_output_audio = first_output_decoded.cpu()
             
             # Accumulate
             total_loss += loss.item()
