@@ -22,7 +22,7 @@ from tqdm import tqdm
 # Import model and utilities
 from adaptive_window_agent import AdaptiveWindowCreativeAgent
 from dataset_wav_pairs import WavPairsDataset
-from training.losses import combined_loss
+from encodec import EncodecModel
 
 
 def load_checkpoint(checkpoint_path, device='cuda'):
@@ -55,19 +55,45 @@ def load_checkpoint(checkpoint_path, device='cuda'):
 def load_encodec(bandwidth=6.0, sample_rate=24000, device='cuda'):
     """Load EnCodec model"""
     print("\nLoading EnCodec...")
-    from audiocraft.models import CompressionModel
+    model = EncodecModel.encodec_model_24khz()
+    model.set_target_bandwidth(bandwidth)
+    model = model.to(device)
+    model.eval()
     
-    encodec_model = CompressionModel.get_pretrained("facebook/encodec_24khz", device=device)
-    encodec_model.set_target_bandwidth(bandwidth)
-    encodec_model.eval()
-    
-    for param in encodec_model.parameters():
+    for param in model.parameters():
         param.requires_grad = False
     
     print(f"  Sample rate: {sample_rate} Hz")
     print(f"  Bandwidth: {bandwidth}")
     
-    return encodec_model
+    return model
+
+
+def encode_audio_batch(audio_batch, encodec_model, target_frames=1200):
+    """
+    Encode batch of audio with EnCodec and resample to target frames.
+    
+    Args:
+        audio_batch: [B, 1, samples] - mono audio (24 sec = 576,000 samples)
+        encodec_model: EnCodec model
+        target_frames: Target number of frames (1200 = 16 sec equivalent)
+    
+    Returns:
+        encoded: [B, 128, target_frames]
+    """
+    with torch.no_grad():
+        latents = encodec_model.encoder(audio_batch)  # [B, 128, T]
+        
+        # Resample to target frames if needed
+        if latents.shape[-1] != target_frames:
+            latents = F.interpolate(
+                latents,
+                size=target_frames,
+                mode='linear',
+                align_corners=False
+            )
+    
+    return latents
 
 
 def compute_metrics(model, encodec_model, dataloader, device, args):
@@ -108,57 +134,58 @@ def compute_metrics(model, encodec_model, dataloader, device, args):
     num_batches = 0
     
     with torch.no_grad():
-        for batch_idx, (audio_inputs, audio_targets) in enumerate(tqdm(dataloader, desc="Validation")):
-            audio_inputs = audio_inputs.to(device)
+        for batch_idx, (encoded_inputs_1800, audio_targets) in enumerate(tqdm(dataloader, desc="Validation")):
+            # Dataset returns: (encoded_input at 1800 frames, raw_audio_target at 576k samples)
             audio_targets = audio_targets.to(device)
             
-            # Encode
-            encoded_inputs = encodec_model.encoder(audio_inputs)
-            encoded_targets = encodec_model.encoder(audio_targets)
+            # Resample encoded inputs from 1800 to 1200 frames (same as training)
+            encoded_inputs_1800 = encoded_inputs_1800.to(device)
+            encoded_inputs = F.interpolate(
+                encoded_inputs_1800,
+                size=1200,
+                mode='linear',
+                align_corners=False
+            )
+            
+            # Encode targets to 1200 frames (same as training)
+            encoded_targets = encode_audio_batch(audio_targets, encodec_model, target_frames=1200)
             
             # Forward pass
             outputs_list, novelty_losses, metadata = model(encoded_inputs, encoded_targets)
             
-            # Compute per-pair losses
-            pair_losses = []
+            # Compute per-pair RMS errors (same as training)
             pair_rms_input = []
             pair_rms_target = []
-            pair_spectral = []
-            pair_mel = []
-            pair_corr_penalty = []
             
             for idx, encoded_output in enumerate(outputs_list):
-                # Decode output
+                # Decode output: 800 frames → 256k samples
                 output_audio = encodec_model.decoder(encoded_output)
                 
-                # Extract center segments (256k samples)
-                input_10sec = audio_inputs[:, :, 160000:416000]
-                target_10sec = audio_targets[:, :, 160000:416000]
+                # Extract center 256k samples from raw audio (same as training)
+                # Center offset: (576000 - 256000) / 2 = 160000
+                target_10sec = audio_targets[:, :, 160000:416000]  # [B, 1, 256000]
                 
-                # Compute loss
-                pair_loss, rms_in, rms_tgt, spec, mel, corr = combined_loss(
-                    output_audio, input_10sec, target_10sec,
-                    getattr(args, 'loss_weight_input', 0.3),
-                    getattr(args, 'loss_weight_target', 0.3),
-                    getattr(args, 'loss_weight_spectral', 0.05),
-                    getattr(args, 'loss_weight_mel', 0.05),
-                    weight_correlation=getattr(args, 'corr_weight', 0.5)
-                )
+                # For input: decode the 1200-frame encoded input, then extract center
+                # But we don't have raw input audio! We only have encoded input.
+                # So decode it first: 1200 frames → 384k samples
+                input_audio_full = encodec_model.decoder(encoded_inputs)  # [B, 1, 384000]
+                # Extract center 256k from 384k: offset = (384000 - 256000) / 2 = 64000
+                input_10sec = input_audio_full[:, :, 64000:320000]  # [B, 1, 256000]
                 
-                pair_losses.append(pair_loss)
+                # Compute simple RMS errors
+                rms_in = F.mse_loss(output_audio, input_10sec).sqrt()
+                rms_tgt = F.mse_loss(output_audio, target_10sec).sqrt()
+                
                 pair_rms_input.append(rms_in)
                 pair_rms_target.append(rms_tgt)
-                pair_spectral.append(spec)
-                pair_mel.append(mel)
-                pair_corr_penalty.append(corr)
             
             # Average across pairs
-            loss = torch.stack(pair_losses).mean()
-            rms_input_val = torch.stack([torch.tensor(v) if not isinstance(v, torch.Tensor) else v for v in pair_rms_input]).mean()
-            rms_target_val = torch.stack([torch.tensor(v) if not isinstance(v, torch.Tensor) else v for v in pair_rms_target]).mean()
-            spec_val = torch.stack([torch.tensor(v) if not isinstance(v, torch.Tensor) else v for v in pair_spectral]).mean()
-            mel_val = torch.stack([torch.tensor(v) if not isinstance(v, torch.Tensor) else v for v in pair_mel]).mean()
-            corr_penalty_val = torch.stack([torch.tensor(v) if not isinstance(v, torch.Tensor) else v for v in pair_corr_penalty]).mean()
+            rms_input_val = torch.stack(pair_rms_input).mean()
+            rms_target_val = torch.stack(pair_rms_target).mean()
+            loss = (rms_input_val + rms_target_val) / 2
+            spec_val = torch.tensor(0.0)  # Not computed in validation
+            mel_val = torch.tensor(0.0)  # Not computed in validation
+            corr_penalty_val = torch.tensor(0.0)  # Not computed in validation
             
             # Novelty loss
             mean_novelty_loss = torch.stack(novelty_losses).mean()
@@ -186,7 +213,7 @@ def compute_metrics(model, encodec_model, dataloader, device, args):
                 original_input_windows = []
                 original_target_windows = []
                 
-                for b in range(audio_inputs.shape[0]):
+                for b in range(encoded_inputs.shape[0]):  # Use encoded_inputs shape
                     start_in = int(params['start_input'][b].item())
                     start_tgt = int(params['start_target'][b].item())
                     
@@ -269,23 +296,32 @@ def generate_samples(model, encodec_model, dataloader, device, output_dir, num_s
     output_dir.mkdir(parents=True, exist_ok=True)
     
     with torch.no_grad():
-        for sample_idx, (audio_inputs, audio_targets) in enumerate(dataloader):
+        for sample_idx, (encoded_inputs_1800, audio_targets) in enumerate(dataloader):
             if sample_idx >= num_samples:
                 break
             
-            audio_inputs = audio_inputs.to(device)
+            # Dataset returns: (encoded_input at 1800 frames, raw_audio_target at 576k samples)
             audio_targets = audio_targets.to(device)
-            
-            # Take first sample from batch
-            audio_input = audio_inputs[0:1]
             audio_target = audio_targets[0:1]
             
-            # Encode
-            encoded_input = encodec_model.encoder(audio_input)
-            encoded_target = encodec_model.encoder(audio_target)
+            # Take first sample and resample from 1800 to 1200 frames
+            encoded_inputs_1800 = encoded_inputs_1800.to(device)
+            encoded_input = encoded_inputs_1800[0:1]
+            encoded_input = F.interpolate(
+                encoded_input,
+                size=1200,
+                mode='linear',
+                align_corners=False
+            )
+            
+            # Encode target to 1200 frames
+            encoded_target = encode_audio_batch(audio_target, encodec_model, target_frames=1200)
             
             # Forward pass
             outputs_list, novelty_losses, metadata = model(encoded_input, encoded_target)
+            
+            # Decode input for saving
+            audio_input = encodec_model.decoder(encoded_input)
             
             # Decode all 3 pairs
             for pair_idx, encoded_output in enumerate(outputs_list):
@@ -362,16 +398,17 @@ def main():
     # Load validation dataset
     print(f"\nLoading validation dataset from: {args.dataset}")
     val_dataset = WavPairsDataset(
-        pairs_dir=Path(args.dataset),
-        duration=24.0,
-        sample_rate=24000
+        data_folder=args.dataset,
+        encodec_model=encodec_model,
+        device=args.device,
+        shuffle_targets=False
     )
     
     val_loader = torch.utils.data.DataLoader(
         val_dataset,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=4
+        num_workers=0  # Set to 0 for validation (dataset has encodec_model)
     )
     
     print(f"  Validation samples: {len(val_dataset)}")
