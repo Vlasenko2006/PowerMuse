@@ -350,8 +350,21 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
             if batch_idx % args.disc_update_freq == 0:
                 disc_optimizer.zero_grad()
                 
-                # Real samples: use encoded targets
-                real_samples = roll_targets(encoded_targets.detach())
+                # Real samples from DIFFERENT batch indices
+                # For batch[i] that went into model, GAN sees pure music from batch[i+1]
+                # This ensures GAN never sees the same pair that was processed by the model
+                # Example: batch[0]->model uses batch[1] for GAN, batch[15] uses batch[0]
+                
+                # Shift by 1: each element gets the next one (circular)
+                shifted_encoded_targets = torch.roll(encoded_targets.detach(), shifts=1, dims=0)
+                
+                # Extract 800 frames (center) from shifted targets
+                if shifted_encoded_targets.shape[2] >= 800:
+                    start = (shifted_encoded_targets.shape[2] - 800) // 2
+                    real_samples = shifted_encoded_targets[:, :, start:start+800]
+                else:
+                    real_samples = shifted_encoded_targets
+                
                 real_logits = discriminator(real_samples)
                 
                 # Fake samples: use averaged output (detach from generator)
