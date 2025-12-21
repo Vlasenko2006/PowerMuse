@@ -21,10 +21,8 @@ from tqdm import tqdm
 
 # Import model and utilities
 from adaptive_window_agent import AdaptiveWindowCreativeAgent
-from audio_discriminator import AudioDiscriminator
 from dataset_wav_pairs import WavPairsDataset
-from losses import combined_loss
-from correlation_penalty import spectral_outlier_penalty
+from training.losses import combined_loss
 
 
 def load_checkpoint(checkpoint_path, device='cuda'):
