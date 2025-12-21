@@ -211,39 +211,29 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
         # Returns: List of 3 outputs [B, 128, 800], List of 3 novelty losses, metadata
         outputs_list, novelty_losses, metadata = model(encoded_inputs, encoded_targets)
         
-        # Average the 3 outputs (simple ensemble)
-        # Each output is [B, 128, 800] (16 seconds compressed)
-        # We need to upsample back to 1200 frames for consistent decoding
+        # The agent processes 3 different 16-second windows internally
+        # Each output is [B, 128, 800] (16 seconds compressed = 384k samples decoded)
+        # We average the 3 outputs and compare to center 16 seconds of target
         
-        # CRITICAL: Must upsample BEFORE averaging, not after
-        # Use F.interpolate with align_corners=False for upsampling
-        outputs_upsampled = []
-        for output in outputs_list:
-            # Interpolate requires 3D input [N, C, L] for mode='linear'
-            # Our output is already [B, 128, 800] which matches this format
-            # Upsample from 800 to 1200 frames (factor of 1.5x)
-            output_1200 = torch.nn.functional.interpolate(
-                output,  # [B, 128, 800]
-                size=1200,
-                mode='linear',
-                align_corners=False
-            )  # [B, 128, 1200]
-            outputs_upsampled.append(output_1200)
-        
-        # Average the 3 upsampled outputs
-        encoded_output = torch.stack(outputs_upsampled, dim=0).mean(dim=0)  # [B, 128, 1200]
+        # Average the 3 outputs directly (no upsampling needed)
+        encoded_output = torch.stack(outputs_list, dim=0).mean(dim=0)  # [B, 128, 800]
         
         # Average novelty losses
         mean_novelty_loss = torch.stack(novelty_losses).mean()
         
         # Decode to audio space (with no_grad to prevent RNN backward error)
         with torch.no_grad():
-            output_audio = encodec_model.decoder(encoded_output.detach())  # [B, 1, 576000]
-            input_audio = encodec_model.decoder(encoded_inputs.detach())
+            output_audio = encodec_model.decoder(encoded_output.detach())  # [B, 1, 384000] (16 sec)
+        
+        # For loss computation, extract center 16 seconds from input and target
+        # Input/target are 576000 samples (24 sec), output is 384000 samples (16 sec)
+        # Center crop: skip first 96000 samples (4 sec), take next 384000 (16 sec)
+        input_16sec = audio_inputs[:, :, 96000:480000]  # [B, 1, 384000]
+        target_16sec = original_targets[:, :, 96000:480000]  # [B, 1, 384000]
         
         # Combined loss with all components
         loss, rms_input_val, rms_target_val, spec_val, mel_val, corr_penalty_val = combined_loss(
-            output_audio, input_audio, original_targets,
+            output_audio, input_16sec, target_16sec,  # All are 16-second (384k samples)
             args.loss_weight_input, args.loss_weight_target,
             args.loss_weight_spectral, args.loss_weight_mel,
             weight_correlation=args.corr_weight
@@ -269,8 +259,8 @@ def train_epoch(model, dataloader, encodec_model, optimizer, rank, world_size, a
         # Compute correlation analysis (output vs input/target)
         with torch.no_grad():
             output_flat = output_audio.reshape(-1)
-            input_flat = input_audio.reshape(-1)
-            target_flat = original_targets.reshape(-1)
+            input_flat = input_16sec.reshape(-1)  # Use 16-sec input
+            target_flat = target_16sec.reshape(-1)  # Use 16-sec target
             
             # Correlations
             output_input_corr = torch.corrcoef(torch.stack([output_flat, input_flat]))[0, 1]
@@ -505,27 +495,20 @@ def validate(model, dataloader, encodec_model, rank, world_size, args):
             # Forward
             outputs_list, novelty_losses, metadata = model(encoded_inputs, encoded_targets)
             
-            # Average outputs with upsampling
-            outputs_upsampled = []
-            for output in outputs_list:
-                # Upsample from 800 to 1200 frames using interpolate
-                output_1200 = torch.nn.functional.interpolate(
-                    output,  # [B, 128, 800]
-                    size=1200,
-                    mode='linear',
-                    align_corners=False
-                )  # [B, 128, 1200]
-                outputs_upsampled.append(output_1200)
-            encoded_output = torch.stack(outputs_upsampled, dim=0).mean(dim=0)
+            # Average outputs (no upsampling - outputs are 16 seconds)
+            encoded_output = torch.stack(outputs_list, dim=0).mean(dim=0)  # [B, 128, 800]
             mean_novelty_loss = torch.stack(novelty_losses).mean()
             
             # Decode
-            output_audio = encodec_model.decoder(encoded_output.detach())
-            input_audio = encodec_model.decoder(encoded_inputs.detach())
+            output_audio = encodec_model.decoder(encoded_output.detach())  # [B, 1, 384000] (16 sec)
+            
+            # Extract center 16 seconds from input and target to match output
+            input_16sec = audio_inputs[:, :, 96000:480000]  # [B, 1, 384000]
+            target_16sec = audio_targets[:, :, 96000:480000]  # [B, 1, 384000]
             
             # Loss
             loss, rms_input_val, rms_target_val, spec_val, mel_val, corr_val = combined_loss(
-                output_audio, input_audio, audio_targets,
+                output_audio, input_16sec, target_16sec,  # All are 16-second
                 args.loss_weight_input, args.loss_weight_target,
                 args.loss_weight_spectral, args.loss_weight_mel,
                 weight_correlation=0.0
@@ -533,10 +516,10 @@ def validate(model, dataloader, encodec_model, rank, world_size, args):
             
             loss = loss + args.mask_reg_weight * mean_novelty_loss
             
-            # Store first sample
+            # Store first sample (use 16-second segments for consistency)
             if batch_idx == 0:
-                first_input_audio = input_audio[0].cpu()
-                first_target_audio = audio_targets[0].cpu()
+                first_input_audio = input_16sec[0].cpu()  # Use 16-sec input
+                first_target_audio = target_16sec[0].cpu()  # Use 16-sec target
                 first_output_audio = output_audio[0].cpu()
             
             # Accumulate
