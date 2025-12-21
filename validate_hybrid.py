@@ -249,8 +249,10 @@ def compute_metrics(model, encodec_model, dataloader, device, args, max_batches=
             
             # Correlation analysis
             output_audio_first = encodec_model.decoder(outputs_list[0])
-            input_10sec = audio_inputs[:, :, 160000:416000]
-            target_10sec = audio_targets[:, :, 160000:416000]
+            # Decode inputs and extract center
+            input_audio_full = encodec_model.decoder(encoded_inputs)
+            input_10sec = input_audio_full[:, :, 64000:320000]  # Center 256k from 384k
+            target_10sec = audio_targets[:, :, 160000:416000]  # Center 256k from 576k
             
             output_flat = output_audio_first.reshape(-1)
             input_flat = input_10sec.reshape(-1)
